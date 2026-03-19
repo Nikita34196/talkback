@@ -26,7 +26,6 @@ import android.util.AttributeSet;
 import androidx.preference.ListPreference;
 import androidx.preference.ListPreferenceDialogFragmentCompat;
 import com.google.android.accessibility.talkback.R;
-import java.util.Locale;
 
 /**
  * Speak punctuation verbosity preference. The user can single-select the verbosity level by all,
@@ -41,6 +40,9 @@ import java.util.Locale;
  */
 public class PunctuationListPreference extends ListPreference {
 
+  public static final String VERBOSITY_WEB_ADDRESS =
+      "https://support.google.com/accessibility/android?p=change_verbosity";
+
   public PunctuationListPreference(Context context, AttributeSet attrs) {
     super(context, attrs);
   }
@@ -51,11 +53,8 @@ public class PunctuationListPreference extends ListPreference {
     builder.setNegativeButton(
         R.string.learn_more,
         (dialog, which) -> {
-          // Jump to Android Accessibility help.
-          String webAddress =
-              "https://support.google.com/accessibility/android/answer/6283655?hl="
-                  + Locale.getDefault().toLanguageTag();
-          Uri uriUrl = Uri.parse(webAddress);
+          // Jumps to Android Accessibility help for change_verbosity.
+          Uri uriUrl = Uri.parse(VERBOSITY_WEB_ADDRESS);
           Intent launchBrowser = new Intent(Intent.ACTION_VIEW, uriUrl);
           getContext().startActivity(launchBrowser);
         });

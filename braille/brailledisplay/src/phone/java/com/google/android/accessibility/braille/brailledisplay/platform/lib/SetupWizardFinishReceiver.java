@@ -6,6 +6,7 @@ import android.content.Context;
 import android.database.ContentObserver;
 import android.os.Handler;
 import android.provider.Settings;
+import com.google.android.accessibility.braille.common.lib.Receiver;
 import com.google.android.accessibility.utils.SettingsUtils;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 

@@ -32,13 +32,15 @@ class FeedbackFragmentsIterator {
 
   private Iterator<FeedbackFragment> currentFragmentIterator;
 
-  private String feedBackItemUtteranceId;
+  private final String feedBackItemUtteranceId;
 
   /** It's available when speaking its content and null between speaking each fragment. */
   private final AtomicReference<FeedbackFragment> currentFeedbackFragment = new AtomicReference<>();
 
-  public FeedbackFragmentsIterator(@NonNull Iterator<FeedbackFragment> currentFragmentIterator) {
+  public FeedbackFragmentsIterator(
+      @NonNull Iterator<FeedbackFragment> currentFragmentIterator, String feedBackItemUtteranceId) {
     this.currentFragmentIterator = currentFragmentIterator;
+    this.feedBackItemUtteranceId = feedBackItemUtteranceId;
   }
 
   /**
@@ -95,10 +97,6 @@ class FeedbackFragmentsIterator {
     }
   }
 
-  void setFeedBackItemUtteranceId(String feedBackItemUtteranceId) {
-    this.feedBackItemUtteranceId = feedBackItemUtteranceId;
-  }
-
   /**
    * Records the index of the sequence to start. Call it in {@link
    * SpeechControllerImpl#onFragmentRangeStarted(String, int, int)}.
@@ -132,9 +130,9 @@ class FeedbackFragmentsIterator {
 
     Iterators.addAll(list, currentFragmentIterator);
 
-    FeedbackFragmentsIterator clone = new FeedbackFragmentsIterator(list.iterator());
+    FeedbackFragmentsIterator clone =
+        new FeedbackFragmentsIterator(list.iterator(), feedBackItemUtteranceId);
     clone.currentFeedbackFragment.set(currentFeedbackFragment.get());
-    clone.setFeedBackItemUtteranceId(feedBackItemUtteranceId);
 
     currentFragmentIterator = ((ArrayList<FeedbackFragment>) list.clone()).iterator();
 

@@ -16,6 +16,8 @@
 
 package com.google.android.accessibility.braille.common;
 
+import static com.google.android.accessibility.utils.AccessibilityServiceCompatUtils.Constants.BRAILLE_KEYBOARD;
+
 import android.content.ComponentName;
 import android.content.Context;
 import android.provider.Settings;
@@ -28,7 +30,9 @@ import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import com.google.android.accessibility.braille.interfaces.SelectionRange;
+import com.google.android.accessibility.utils.KeyboardUtils;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.util.Objects;
 
 /** Provides the utilities for common braille usages. */
 public class BrailleCommonUtils {
@@ -147,6 +151,7 @@ public class BrailleCommonUtils {
         || inputTypeClass == InputType.TYPE_CLASS_PHONE
         || inputTypeClass == InputType.TYPE_CLASS_DATETIME);
   }
+
   /** Returns {@code true} if {@code editorInfo}'s input type is password. */
   public static boolean isPasswordField(EditorInfo editorInfo) {
     return editorInfo != null
@@ -215,32 +220,22 @@ public class BrailleCommonUtils {
         && variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
   }
 
-  /** Determines from system settings if {@code imeComponentName} is an enabled input method. */
-  @SuppressWarnings("StringSplitter") // Guava not used in project, so Splitter not available.
-  public static boolean isInputMethodEnabled(Context contextArg, ComponentName imeComponentName) {
-    final String enabledIMEIds =
-        Settings.Secure.getString(
-            contextArg.getContentResolver(), Settings.Secure.ENABLED_INPUT_METHODS);
-    if (enabledIMEIds == null) {
-      return false;
-    }
-
-    for (String enabledIMEId : enabledIMEIds.split(":")) {
-      if (imeComponentName.equals(ComponentName.unflattenFromString(enabledIMEId))) {
-        return true;
-      }
-    }
-    return false;
+  /**
+   * Determines from {@link InputMethodManager} if {@link BRAILLE_KEYBOARD} is an enabled input
+   * method.
+   */
+  public static boolean isBrailleKeyboardEnabled(Context context) {
+    return KeyboardUtils.isImeEnabled(context, BRAILLE_KEYBOARD);
   }
 
-  /** Determines, from system settings, if {@code imeComponentName} is the default input method. */
-  public static boolean isInputMethodDefault(Context contextArg, ComponentName imeComponentName) {
-    final String defaultIMEId =
+  /** Determines, from system settings, if {@link BRAILLE_KEYBOARD} is the default input method. */
+  public static boolean isBrailleKeyboardDefault(Context context) {
+    final String defaultImeId =
         Settings.Secure.getString(
-            contextArg.getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD);
+            context.getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD);
 
-    return defaultIMEId != null
-        && imeComponentName.equals(ComponentName.unflattenFromString(defaultIMEId));
+    return defaultImeId != null
+        && Objects.equals(ComponentName.unflattenFromString(defaultImeId), BRAILLE_KEYBOARD);
   }
 
   /** Filters non-printing characters like \u202A and \u202C. */

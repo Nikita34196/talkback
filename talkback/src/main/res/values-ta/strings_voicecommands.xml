@@ -77,7 +77,7 @@
   <string name="voice_commands_quit">வெளியேறு</string>
   <string name="voice_commands_quiet">அமைதியாக்கு</string>
   <string name="voice_commands_pause">இடைநிறுத்து</string>
-  <string name="voice_commands_nevermind">பரவாயில்லை</string>
+  <string name="voice_commands_nevermind">வேண்டாம்</string>
   <string name="voice_commands_shut_up">அமைதியாக்கு</string>
   <string name="voice_commands_faster">வேகமாக்கு</string>
   <string name="voice_commands_increase_speech_rate">பேச்சு வேகத்தை அதிகரி</string>

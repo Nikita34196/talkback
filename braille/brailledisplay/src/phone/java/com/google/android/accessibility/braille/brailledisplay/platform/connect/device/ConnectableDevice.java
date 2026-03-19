@@ -16,12 +16,42 @@
 
 package com.google.android.accessibility.braille.brailledisplay.platform.connect.device;
 
+import android.text.TextUtils;
+
 /** Connectable device. */
 public abstract class ConnectableDevice {
   private boolean useHid = false;
 
   /** The name of the connectable device. */
   public abstract String name();
+
+  /** The truncated name of the connectable device. */
+  public String truncatedName() {
+    String name = name();
+    if (!TextUtils.isEmpty(name)) {
+      char[] masked = name().toCharArray();
+      for (int i = 0; i < masked.length; i++) {
+        if (masked[i] == ' ') {
+          continue;
+        }
+        if (i >= masked.length / 2) {
+          masked[i] = '*';
+        }
+      }
+      name = new String(masked);
+    }
+    return name;
+  }
+
+  /** The vendor id of the connectable device. */
+  public int vendorId() {
+    return 0;
+  }
+
+  /** The product id of the connectable device. */
+  public int productId() {
+    return 0;
+  }
 
   /** The address of the connectable device. */
   public abstract String address();
@@ -36,9 +66,9 @@ public abstract class ConnectableDevice {
     return useHid;
   }
 
-  /** Returns a string including both the name and address. */
+  /** Returns a string with masked name and address. */
   @Override
   public String toString() {
-    return name() + "(" + address() + ")";
+    return truncatedName() + "(" + address() + ")";
   }
 }

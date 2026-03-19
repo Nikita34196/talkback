@@ -31,7 +31,19 @@ public abstract class ConnectableUsbDevice extends ConnectableDevice {
   }
 
   @Override
+  public int vendorId() {
+    return usbDevice().getVendorId();
+  }
+
+  @Override
+  public int productId() {
+    return usbDevice().getProductId();
+  }
+
+  @Override
   public String address() {
+    // We can't use the serial number because we need it before permission is granted.
+    // Apps targeting SDK 29+ without read permission will throw an exception.
     return String.valueOf(usbDevice().getDeviceId());
   }
 

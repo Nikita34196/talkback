@@ -16,7 +16,7 @@
 
 package com.google.android.accessibility.talkback.imagecaption;
 
-import static com.google.android.accessibility.utils.caption.ImageCaptionUtils.CaptionType.IMAGE_DESCRIPTION;
+import static com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType.IMAGE_DESCRIPTION;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -25,7 +25,6 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.talkback.imagedescription.ImageDescriptionInfo;
 import com.google.android.accessibility.talkback.imagedescription.ImageDescriptionListener;
 import com.google.android.accessibility.talkback.imagedescription.ImageDescriptionProcessor;
-import com.google.android.accessibility.utils.caption.Result;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 
 /** A {@link CaptionRequest} to describe the contents of an image on the screenshot. */

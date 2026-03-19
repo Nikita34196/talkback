@@ -64,8 +64,9 @@ class MultiFingerMultiTap extends GestureMatcher {
       int fingers,
       int taps,
       int gestureId,
-      GestureMatcher.StateChangeListener listener) {
-    super(gestureId, new Handler(context.getMainLooper()), listener);
+      GestureMatcher.StateChangeListener listener,
+      GestureMatcher.AnalyticsEventLogger logger) {
+    super(gestureId, new Handler(context.getMainLooper()), listener, logger);
     mTargetTapCount = taps;
     targetFingerCount = fingers;
     doubleTapSlop = ViewConfiguration.get(context).getScaledDoubleTapSlop() * fingers;

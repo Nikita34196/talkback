@@ -54,7 +54,7 @@
   <string name="voice_commands_Spell">Fai lo spelling</string>
   <string name="voice_commands_talkback_settings">Impostazioni di TalkBack</string>
   <string name="voice_commands_talkback_setting">Impostazione di TalkBack</string>
-  <string name="voice_commands_screen_search">Ricerca dallo schermo</string>
+  <string name="voice_commands_screen_search">Ricerca sullo schermo</string>
   <string name="voice_commands_search_on_screen">Cerca sullo schermo</string>
   <string name="voice_commands_copy">@android:string/copy</string>
   <string name="voice_commands_cut">@android:string/cut</string>

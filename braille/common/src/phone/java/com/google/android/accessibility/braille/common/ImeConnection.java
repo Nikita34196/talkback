@@ -24,7 +24,6 @@ public class ImeConnection {
   /** Audial feedback types. */
   public enum AnnounceType {
     NORMAL,
-    HIDE_PASSWORD,
     SILENCE,
   }
 

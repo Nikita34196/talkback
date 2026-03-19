@@ -23,9 +23,17 @@ import java.util.Map;
 /** Information about a supported bonded bluetooth device. */
 @AutoValue
 public abstract class DeviceInfo {
+  /** The type of the connection. */
+  public enum Type {
+    USB,
+    BLUETOOTH
+  }
+
   public abstract String driverCode();
 
-  public abstract String modelName();
+  public abstract Type type();
+
+  public abstract String truncatedName();
 
   public abstract boolean connectSecurely();
 
@@ -40,7 +48,9 @@ public abstract class DeviceInfo {
   public abstract static class Builder {
     public abstract Builder setDriverCode(String driverCode);
 
-    public abstract Builder setModelName(String modelName);
+    public abstract Builder setType(Type address);
+
+    public abstract Builder setTruncatedName(String truncatedName);
 
     public abstract Builder setConnectSecurely(boolean connectSecurely);
 

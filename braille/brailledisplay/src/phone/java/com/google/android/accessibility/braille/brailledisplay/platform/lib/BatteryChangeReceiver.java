@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.BatteryManager;
 import android.os.Bundle;
+import com.google.android.accessibility.braille.common.lib.ActionReceiver;
 
 /** A BroadcastReceiver for listening to battery change. */
 public class BatteryChangeReceiver

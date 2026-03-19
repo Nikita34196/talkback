@@ -18,13 +18,12 @@ package com.google.android.accessibility.braille.common.translate;
 
 import android.content.Context;
 import androidx.annotation.Nullable;
-import com.google.android.accessibility.braille.common.EmojiUtils;
-import com.google.android.accessibility.braille.common.FeatureFlagReader;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 import com.google.android.accessibility.braille.interfaces.BrailleWord;
 import com.google.android.accessibility.braille.translate.BrailleTranslator;
 import com.google.android.accessibility.braille.translate.TranslationResult;
 import com.google.android.accessibility.braille.translate.TranslationResultCustomizer;
+import com.google.android.accessibility.utils.EmojiUtils;
 import java.util.regex.Matcher;
 
 /**
@@ -55,7 +54,6 @@ public class GoogleTranslationResultCustomizer implements TranslationResultCusto
       result = TranslationResult.correctTranslation(result, correctBrailleWord, i, i + 1);
     }
 
-    if (FeatureFlagReader.useReplaceEmoji(context)) {
       // Replace emoji with emoji's short code.
       Matcher emojis = EmojiUtils.findEmoji(result.text());
       while (emojis.find()) {
@@ -68,7 +66,6 @@ public class GoogleTranslationResultCustomizer implements TranslationResultCusto
             TranslationResult.correctTranslation(
                 result, correctBrailleWord, emojis.start(), emojis.end());
       }
-    }
     return result;
   }
 }

@@ -28,26 +28,21 @@ public final class PageConfigMapperImpl implements PageConfigMapper {
   @Override
   @Nullable
   public PageConfig getPage(PageId pageId, Context context, int vendorPageIndex) {
-    switch (pageId) {
-      case PAGE_ID_WELCOME_TO_TALKBACK_WATCH:
-        return WearTutorialInitiator.WELCOME_TO_TALKBACK_WATCH_PAGE.build();
-      case PAGE_ID_WATCH_SCROLLING:
-        return WearTutorialInitiator.SCROLLING_WATCH_PAGE.build();
-      case PAGE_ID_WATCH_GO_BACK:
-        return WearTutorialInitiator.GO_BACK_WATCH_PAGE.build();
-      case PAGE_ID_WATCH_VOLUME_UP:
-        return WearTutorialInitiator.VOLUME_UP_WATCH_PAGE.build();
-      case PAGE_ID_WATCH_VOLUME_DOWN:
-        return WearTutorialInitiator.VOLUME_DOWN_WATCH_PAGE.build();
-      case PAGE_ID_WATCH_OPEN_TALKBACK_MENU:
-        return WearTutorialInitiator.OPEN_TALKBACK_MENU_WATCH_PAGE.build();
-      case PAGE_ID_WATCH_END_TUTORIAL:
-        return WearTutorialInitiator.END_TUTORIAL_WATCH_PAGE.build();
-        // Uncomment it when wear platform supports speech recognize.
-        // case PAGE_ID_VOICE_COMMAND_FIND_ITEMS_FOR_WATCH:
-        //   return VoiceCommandAndHelpConfigs.VOICE_COMMAND_FIND_ITEMS_FOR_WATCH.build();
-      default:
-        return null;
-    }
+    return switch (pageId) {
+      case PAGE_ID_WELCOME_TO_TALKBACK_WATCH ->
+          WearTutorialInitiator.WELCOME_TO_TALKBACK_WATCH_PAGE.build();
+      case PAGE_ID_WATCH_SCROLLING -> WearTutorialInitiator.getWearScrollingPage(context).build();
+      case PAGE_ID_WATCH_GO_BACK -> WearTutorialInitiator.getWearGoBackPage(context).build();
+      case PAGE_ID_WATCH_VOLUME_UP -> WearTutorialInitiator.VOLUME_UP_WATCH_PAGE.build();
+      case PAGE_ID_WATCH_VOLUME_DOWN -> WearTutorialInitiator.VOLUME_DOWN_WATCH_PAGE.build();
+      case PAGE_ID_WATCH_OPEN_TALKBACK_MENU ->
+          WearTutorialInitiator.OPEN_TALKBACK_MENU_WATCH_PAGE.build();
+      case PAGE_ID_WATCH_TYPING -> WearTutorialInitiator.typingPage.build();
+      case PAGE_ID_WATCH_END_TUTORIAL -> WearTutorialInitiator.END_TUTORIAL_WATCH_PAGE.build();
+      // Uncomment it when wear platform supports speech recognize.
+      // case PAGE_ID_VOICE_COMMAND_FIND_ITEMS_FOR_WATCH:
+      //   return VoiceCommandAndHelpConfigs.VOICE_COMMAND_FIND_ITEMS_FOR_WATCH.build();
+      default -> null;
+    };
   }
 }

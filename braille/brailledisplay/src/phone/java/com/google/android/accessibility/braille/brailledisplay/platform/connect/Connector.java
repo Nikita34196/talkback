@@ -5,9 +5,11 @@ import com.google.android.accessibility.braille.brailledisplay.platform.connect.
 /** Sets up a connection to a remote device. */
 public abstract class Connector {
   private final ConnectableDevice device;
+  private final Connector.Callback callback;
 
-  public Connector(ConnectableDevice device) {
+  public Connector(ConnectableDevice device, Connector.Callback callback) {
     this.device = device;
+    this.callback = callback;
   }
 
   /** Establishes connection to a device. */
@@ -19,6 +21,11 @@ public abstract class Connector {
   /** Returns device to connect. */
   public ConnectableDevice getDevice() {
     return device;
+  }
+
+  /** Returns {@code Connector.Callback}. */
+  public Callback getConnectorCallback() {
+    return callback;
   }
 
   /** Callback for {@link Connector}. */

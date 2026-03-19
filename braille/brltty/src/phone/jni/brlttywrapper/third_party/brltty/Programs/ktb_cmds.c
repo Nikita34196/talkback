@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -181,6 +181,7 @@ static const CommandListEntry commandList_say[] = {
   { .code = BRL_CMD_SAY_HIGHER },
   { .code = BRL_CMD_AUTOSPEAK },
   { .code = BRL_CMD_ASPK_SEL_LINE },
+  { .code = BRL_CMD_ASPK_EMP_LINE },
   { .code = BRL_CMD_ASPK_SEL_CHAR },
   { .code = BRL_CMD_ASPK_INS_CHARS },
   { .code = BRL_CMD_ASPK_DEL_CHARS },

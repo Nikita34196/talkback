@@ -17,20 +17,11 @@
 package com.google.android.accessibility.talkback;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics;
-import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.GeminiOptInId;
-import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.ImageCaptionEventId;
 
 /** Analytics that tracks TalkBack usage. */
-public class TalkBackAnalyticsImpl extends TalkBackAnalytics {
-  public TalkBackAnalyticsImpl(TalkBackService service) {}
+public class TalkBackAnalyticsImpl implements TalkBackAnalytics {
+  public TalkBackAnalyticsImpl(Context context) {}
 
-  /** Collect image caption event. This is reserved for report from Settings. */
-  public static void onImageCaptionEventFromSettings(
-      SharedPreferences prefs, Context context, @ImageCaptionEventId int event) {}
-
-  /** Collect Gemini Opt-in event. This is reserved for report from Settings. */
-  public static void onGeminiOptInFromSettings(
-      SharedPreferences prefs, Context context, @GeminiOptInId int event) {}
+  public TalkBackAnalyticsImpl(Context context, PeriodicDataProvider periodicDataProvider) {}
 }

@@ -16,15 +16,25 @@
 
 package com.google.android.accessibility.talkback.dynamicfeature;
 
-import android.content.Context;
+import android.app.Application;
+import androidx.annotation.Nullable;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 
 /** A factory class to create a {@link Downloader}. */
 public class DownloaderFactory {
 
   private DownloaderFactory() {}
 
-  // TODO: b/319748366 - Returns the MDD downloader if MDD flag is enabled.
-  public static Downloader create(Context context) {
-    return SplitApkDownloader.getInstance(context);
+  public static Downloader create(Application application) {
+    return FeatureFlagReader.enableMdd(application)
+        ? MddDownloader.getInstance(application)
+        : SplitApkDownloader.getInstance(application);
+  }
+
+  @Nullable
+  public static Downloader legacy(Application application) {
+    return FeatureFlagReader.enableMdd(application)
+        ? SplitApkDownloader.getInstance(application)
+        : null;
   }
 }

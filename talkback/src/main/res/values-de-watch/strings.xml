@@ -7,7 +7,5 @@
   <string name="talkback_updated_notification_content">Für Details TalkBack öffnen</string>
   <string name="new_feature_in_talkback_title">Das ist neu</string>
   <string name="reset_button_in_reset_gesture_settings_confirm_dialog">Ok</string>
-  <string name="scan_the_qr_code">Scanne den QR-Code</string>
-  <string name="alternate_privacy_policy">Oder ruf http://www.google.com/policies/privacy auf</string>
-  <string name="alternate_tos">Oder ruf https://www.google.com/mobile/toscountry auf</string>
+  <string name="turn_off_talkback">Deaktivieren</string>
 </resources>

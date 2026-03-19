@@ -43,8 +43,10 @@ public final class PageConfigMapperImpl implements PageConfigMapper {
       case PAGE_ID_MENUS_PRE_R:
       case PAGE_ID_TUTORIAL_FINISHED:
       case PAGE_ID_TUTORIAL_INDEX:
+      case PAGE_ID_KEYBOARD_TUTORIAL_INDEX:
       case PAGE_ID_USING_TEXT_BOXES:
       case PAGE_ID_TYPING_TEXT:
+      case PAGE_ID_BASIC_TYPING_TEXT:
       case PAGE_ID_MOVING_CURSOR:
       case PAGE_ID_SELECTING_TEXT:
       case PAGE_ID_SELECTING_TEXT_PRE_R:
@@ -62,14 +64,41 @@ public final class PageConfigMapperImpl implements PageConfigMapper {
       case PAGE_ID_JUMP_BETWEEN_LINKS_PRE_R:
       case PAGE_ID_JUMP_BETWEEN_HEADINGS:
       case PAGE_ID_JUMP_BETWEEN_HEADINGS_PRE_R:
+      case PAGE_ID_JUMP_BETWEEN_CONTAINERS:
+      case PAGE_ID_JUMP_BETWEEN_CONTAINERS_PRE_R:
+      case PAGE_ID_IMAGE_DESCRIPTION_PLAYGROUND:
       case PAGE_ID_VOICE_COMMANDS:
+      case PAGE_ID_SCREEN_SEARCH:
+      case PAGE_ID_SCREEN_SEARCH_NAVIGATION:
       case PAGE_ID_PRACTICE_GESTURES:
       case PAGE_ID_PRACTICE_GESTURES_PRE_R:
+      case PAGE_ID_PRACTICE_KEYBOARD_GESTURES:
       case PAGE_ID_ADDITIONAL_TIPS_MAKING_CALLS:
       case PAGE_ID_ADDITIONAL_TIPS_SENDING_MESSAGES:
       case PAGE_ID_ADDITIONAL_TIPS_READING_WEB_EMAILS:
       case PAGE_ID_ADDITIONAL_TIPS_LOOKOUT:
       case PAGE_ID_ADDITIONAL_TIPS_CHECKING_NOTIFICATIONS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_WELCOME_TO_TALKBACK:
+      case PAGE_ID_KEYBOARD_TUTORIAL_CHARS_WORDS_PARAGRAPHS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_SYSTEM_NAVIGATION:
+      case PAGE_ID_KEYBOARD_TUTORIAL_SPEECH_SETTINGS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_MORE_KEYBOARD_SHORTCUTS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_FINISHED:
+      case PAGE_ID_KEYBOARD_TUTORIAL_NAVIGATE_WEB_CONTENT:
+      case PAGE_ID_KEYBOARD_TUTORIAL_HEADING_LEVELS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_TABLES:
+      case PAGE_ID_KEYBOARD_TUTORIAL_EDITING_TEXT:
+      case PAGE_ID_KEYBOARD_TUTORIAL_MORE_BROWSE_MODE:
+      case PAGE_ID_KEYBOARD_TUTORIAL_READING_CONTROLS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_JUMP_BETWEEN_CONTROLS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_JUMP_BETWEEN_LINKS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_JUMP_BETWEEN_HEADINGS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_JUMP_BETWEEN_CONTAINERS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_CUSTOMIZE_READING_CONTROLS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_IMAGE_DESCRIPTION:
+      case PAGE_ID_KEYBOARD_TUTORIAL_VOICE_COMMANDS:
+      case PAGE_ID_KEYBOARD_TUTORIAL_SCREEN_SEARCH:
+      case PAGE_ID_KEYBOARD_TUTORIAL_NAVIGATE_BY_SCREEN_SEARCH:
         return TutorialConfigUtils.getInitialPageBuilder(pageId).build();
       case PAGE_ID_VOICE_COMMAND_OVERVIEW:
         return VoiceCommandAndHelpConfigs.VoiceCommandOverView.build();
@@ -85,14 +114,22 @@ public final class PageConfigMapperImpl implements PageConfigMapper {
         return VoiceCommandAndHelpConfigs.VoiceCommandOtherCommands.build();
       case PAGE_ID_UPDATE_WELCOME:
         return OnboardingConfigs.updateWelcome.build();
-      case PAGE_ID_DETAILED_IMAGE_DESCRIPTIONS:
-        return OnboardingConfigs.imageDescription.build();
-      case PAGE_ID_GOOGLE_DISABILITY_SUPPORT:
-        return OnboardingConfigs.googleDisabilitySupport.build();
-      case PAGE_ID_PUNCTUATION_AND_SYMBOLS:
-        return OnboardingConfigs.punctuationAndSymbols.build();
-      case PAGE_ID_NEW_BRAILLE_SHORTCUTS:
-        return OnboardingConfigs.newBrailleShortcuts.build();
+      case PAGE_ID_NEW_SETTINGS_LAYOUT:
+        return OnboardingConfigs.newSettingsLayout.build();
+      case PAGE_ID_ANNOUNCING_TEXT_FORMATTING:
+        return OnboardingConfigs.announcingTextFormatting.build();
+      case PAGE_ID_SHORTCUT_FOR_DICTATION:
+        return OnboardingConfigs.shortcutForDictation.build();
+      case PAGE_ID_SHORTCUT_FOR_DICTATION_WITHOUT_GOOGLE_PLAY:
+        return OnboardingConfigs.shortcutForDictationWithoutGooglePlay.build();
+      case PAGE_ID_SPLIT_TAP_EVERYWHERE:
+        return OnboardingConfigs.splitTapEverywhere.build();
+      case PAGE_ID_KEYBOARD_ENHANCED_KEYMAP:
+        return OnboardingConfigs.enhancedKeymap.build();
+      case PAGE_ID_KEYBOARD_SMART_BROWSE_MODE:
+        return OnboardingConfigs.smartBrowseMode.build();
+      case PAGE_ID_KEYBOARD_TUTORIAL:
+        return OnboardingConfigs.keyboardTutorial.build();
       case PAGE_ID_TV_OVERVIEW:
       case PAGE_ID_TV_SHORTCUT:
       case PAGE_ID_TV_REMOTE:

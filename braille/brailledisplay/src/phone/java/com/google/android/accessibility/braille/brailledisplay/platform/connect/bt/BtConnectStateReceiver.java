@@ -18,8 +18,13 @@ package com.google.android.accessibility.braille.brailledisplay.platform.connect
 
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
+import android.os.Build;
+import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
-import com.google.android.accessibility.braille.brailledisplay.platform.lib.ActionReceiver;
+import com.google.android.accessibility.braille.common.lib.ActionReceiver;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /** A BroadcastReceiver that listens for the bonding of this device with a bluetooth device. */
@@ -35,6 +40,8 @@ public class BtConnectStateReceiver
     void onConnected(BluetoothDevice device);
 
     void onDisconnected(BluetoothDevice device);
+
+    void onUpdated(BluetoothDevice device);
   }
 
   public BtConnectStateReceiver(Context context, Callback callback) {
@@ -55,15 +62,25 @@ public class BtConnectStateReceiver
       callback.onConnected(bluetoothDevice);
     } else if (Objects.equals(action, BluetoothDevice.ACTION_ACL_DISCONNECTED)) {
       callback.onDisconnected(bluetoothDevice);
+    } else if (Objects.equals(action, BluetoothDevice.ACTION_NAME_CHANGED)
+        || (Build.VERSION.SDK_INT >= VERSION_CODES.R
+            && Objects.equals(action, BluetoothDevice.ACTION_ALIAS_CHANGED))) {
+      callback.onUpdated(bluetoothDevice);
     }
   }
 
   @Override
   protected String[] getActionsList() {
-    return new String[] {
-      BluetoothDevice.ACTION_BOND_STATE_CHANGED,
-      BluetoothDevice.ACTION_ACL_CONNECTED,
-      BluetoothDevice.ACTION_ACL_DISCONNECTED
-    };
+    List<String> actions =
+        new ArrayList<>(
+            Arrays.asList(
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED,
+                BluetoothDevice.ACTION_ACL_CONNECTED,
+                BluetoothDevice.ACTION_ACL_DISCONNECTED,
+                BluetoothDevice.ACTION_NAME_CHANGED));
+    if (Build.VERSION.SDK_INT >= VERSION_CODES.R) {
+      actions.add(BluetoothDevice.ACTION_ALIAS_CHANGED);
+    }
+    return actions.stream().toArray(String[]::new);
   }
 }

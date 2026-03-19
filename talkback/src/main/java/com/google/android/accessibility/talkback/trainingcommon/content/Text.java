@@ -17,16 +17,18 @@
 package com.google.android.accessibility.talkback.trainingcommon.content;
 
 import static android.widget.Toast.LENGTH_LONG;
+import static androidx.core.text.HtmlCompat.FROM_HTML_MODE_LEGACY;
 
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
+import android.text.Html;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.method.LinkMovementMethod;
 import android.text.style.BulletSpan;
+import android.text.style.ClickableSpan;
 import android.text.style.TtsSpan;
 import android.text.style.URLSpan;
 import android.view.LayoutInflater;
@@ -35,10 +37,12 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.trainingcommon.PageConfig.LinkInfo;
 import com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate;
 import com.google.android.accessibility.talkback.trainingcommon.TrainingIpcClient.ServiceData;
 import com.google.android.accessibility.utils.FeatureSupport;
@@ -63,8 +67,34 @@ public class Text extends PageContentConfig {
       LayoutInflater inflater, ViewGroup container, Context context, ServiceData data) {
     final View view = inflater.inflate(R.layout.training_text, container, false);
     final TextView textView = view.findViewById(R.id.training_text);
+
+    FinalizeTextData finalizeTextData = provideFinalizedTextData(context, data);
+
+    if (finalizeTextData.isSubText()) {
+      LinearLayout.LayoutParams layoutParams =
+          new LinearLayout.LayoutParams(
+              LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      layoutParams.setMargins(0, 0, 0, 0);
+      textView.setLayoutParams(layoutParams);
+    }
+
+    textView.setText(finalizeTextData.getFinalizedText());
+    textView.setElegantTextHeight(true);
+    if (finalizeTextData.isContainLink()) {
+      textView.setMovementMethod(LinkMovementMethod.getInstance());
+    }
+    if (finalizeTextData.isContainHtmlLink()) {
+      textView.setMovementMethod(LinkMovementMethod.getInstance());
+      textView.setClickable(true);
+      textView.setFocusable(true);
+    }
+    return view;
+  }
+
+  protected FinalizeTextData provideFinalizedTextData(Context context, ServiceData data) {
     boolean isSubText = false;
     boolean containLink = false;
+    boolean containHtmlLink = false;
     SpannableStringBuilder spannableStringBuilder = new SpannableStringBuilder();
     for (Paragraph paragraph : paragraphs) {
       if (paragraph.subText()) {
@@ -75,29 +105,62 @@ public class Text extends PageContentConfig {
         spannableStringBuilder.append("\n\n");
       }
       spannableStringBuilder.append(getText(context, paragraph, data));
-      if (!containLink && paragraph.link()) {
+      if (!containLink
+          && (paragraph.link()
+              || (paragraph.clickableTextResIds() != null
+                  && paragraph.clickableTextResIds().size() > 0))) {
         containLink = true;
       }
-    }
 
-    if (isSubText) {
-      LinearLayout.LayoutParams layoutParams =
-          new LinearLayout.LayoutParams(
-              LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      layoutParams.setMargins(0, 0, 0, 0);
-      textView.setLayoutParams(layoutParams);
+      if (!containHtmlLink && paragraph.html()) {
+        containHtmlLink = true;
+      }
     }
-
-    textView.setText(spannableStringBuilder);
-    textView.setElegantTextHeight(true);
-    if (containLink) {
-      textView.setMovementMethod(LinkMovementMethod.getInstance());
-    }
-    return view;
+    return new FinalizeTextData(spannableStringBuilder, isSubText, containLink, containHtmlLink);
   }
 
   private SpannableString getText(Context context, Paragraph paragraph, ServiceData data) {
     String text;
+    // The clickable texts {@link Paragraph#clickableTextResIds()} which are arguments of the string
+    // {@link Paragraph#textResId()} are wrapped by a ClickableSpan and a TTtsSpan.
+    int clickableTextSize = paragraph.clickableTextResIds().size();
+    if (paragraph.clickableTextResIds() != null && clickableTextSize > 0) {
+      Object[] clickableTexts = new Object[clickableTextSize];
+      for (int i = 0; i < clickableTextSize; i++) {
+        clickableTexts[i] = context.getString(paragraph.clickableTextResIds().get(i));
+      }
+      text = context.getString(paragraph.textResId(), clickableTexts);
+      SpannableString spannableString = new SpannableString(text);
+      for (int i = 0; i < clickableTextSize; i++) {
+        String clickableText = (String) clickableTexts[i];
+        int start = text.indexOf(clickableText);
+        int end = start + clickableText.length();
+        final Intent intent = paragraph.linkInfos().get(i).createIntent(context);
+        if (start >= 0 && end > start) {
+          if (intent != null) {
+            spannableString.setSpan(
+                new ClickableSpan() {
+                  @Override
+                  public void onClick(@NonNull View widget) {
+                    context.startActivity(intent);
+                  }
+                },
+                start,
+                end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+          }
+
+          spannableString.setSpan(
+              new TtsSpan.TextBuilder(context.getString(paragraph.clickableTextTtsResIds().get(i)))
+                  .build(),
+              start,
+              end,
+              Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+      }
+      return spannableString;
+    }
+
     if (paragraph.textArgResIds() == null || paragraph.textArgResIds().size() < 1) {
       text = getTextWithRealGesture(context, paragraph, data);
     } else {
@@ -124,7 +187,9 @@ public class Text extends PageContentConfig {
       spannableString.setSpan(ttsSpan, 0, text.length(), 0 /* no flag */);
     }
 
-    return spannableString;
+    return paragraph.html()
+        ? new SpannableString(Html.fromHtml(text, FROM_HTML_MODE_LEGACY))
+        : spannableString;
   }
 
   /**
@@ -213,13 +278,11 @@ public class Text extends PageContentConfig {
 
     @Override
     public void onClick(View view) {
+      super.onClick(view);
       String urlLink = super.getURL();
       if (TextUtils.isEmpty(urlLink)) {
-        super.onClick(view);
         Toast.makeText(context, context.getString(R.string.activated_view, urlText), LENGTH_LONG)
             .show();
-      } else {
-        context.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(urlLink)));
       }
     }
   }
@@ -238,6 +301,13 @@ public class Text extends PageContentConfig {
     public abstract String textString();
 
     public abstract ImmutableList<Integer> textArgResIds();
+
+    public abstract ImmutableList<Integer> clickableTextResIds();
+
+    public abstract ImmutableList<Integer> clickableTextTtsResIds();
+
+    /** A list of link information which {@link Paragraph#clickableTextResIds} are linked to. */
+    public abstract ImmutableList<LinkInfo> linkInfos();
 
     @StringRes
     public abstract int textWithActualGestureResId();
@@ -262,6 +332,8 @@ public class Text extends PageContentConfig {
 
     public abstract String urlLink();
 
+    public abstract boolean html();
+
     public static Builder builder(@StringRes int textResId) {
       return builder().setTextResId(textResId);
     }
@@ -275,6 +347,9 @@ public class Text extends PageContentConfig {
           .setTextResId(UNKNOWN_RESOURCE_ID)
           .setTextString(null)
           .setTextArgResIds(ImmutableList.of())
+          .setClickableTextResIds(ImmutableList.of())
+          .setClickableTextTtsResIds(ImmutableList.of())
+          .setLinkInfos(ImmutableList.of())
           .setTextWithActualGestureResId(UNKNOWN_RESOURCE_ID)
           .setTextTtsSpanResId(UNKNOWN_RESOURCE_ID)
           .setActionKey(UNKNOWN_RESOURCE_ID)
@@ -282,7 +357,8 @@ public class Text extends PageContentConfig {
           .setBulletPoint(false)
           .setSubText(false)
           .setLink(false)
-          .setUrlLink(INVALID_URL_LINK);
+          .setUrlLink(INVALID_URL_LINK)
+          .setHtml(false);
     }
 
     /** Builder for a paragraph in TextView. */
@@ -294,6 +370,13 @@ public class Text extends PageContentConfig {
       public abstract Builder setTextString(@Nullable String textString);
 
       public abstract Builder setTextArgResIds(ImmutableList<Integer> textArgResIds);
+
+      public abstract Builder setClickableTextResIds(ImmutableList<Integer> clickableTextResIds);
+
+      public abstract Builder setClickableTextTtsResIds(
+          ImmutableList<Integer> clickableTextTtsResIds);
+
+      public abstract Builder setLinkInfos(ImmutableList<LinkInfo> linkInfos);
 
       public abstract Builder setTextWithActualGestureResId(
           @StringRes int textWithActualGestureResId);
@@ -311,6 +394,8 @@ public class Text extends PageContentConfig {
       public abstract Builder setLink(boolean isLink);
 
       public abstract Builder setUrlLink(String urlLink);
+
+      public abstract Builder setHtml(boolean isHtml);
 
       abstract Paragraph autoBuild();
 
@@ -345,6 +430,41 @@ public class Text extends PageContentConfig {
         @Nullable PageAndContentPredicate predicate) {
       return new TextWithActualGestureParameter(
           textWithActualGestureResId, actionKey, defaultGestureResId, predicate);
+    }
+  }
+
+  /** A TextData containing text information for this Text. */
+  public static class FinalizeTextData {
+    private final boolean isSubText;
+    private final boolean containLink;
+    private final boolean containHtmlLink;
+    private final CharSequence finalizedText;
+
+    FinalizeTextData(
+        CharSequence finalizedText,
+        boolean isSubText,
+        boolean containLink,
+        boolean containHtmlLink) {
+      this.finalizedText = finalizedText;
+      this.isSubText = isSubText;
+      this.containLink = containLink;
+      this.containHtmlLink = containHtmlLink;
+    }
+
+    public boolean isContainLink() {
+      return containLink;
+    }
+
+    public boolean isContainHtmlLink() {
+      return containHtmlLink;
+    }
+
+    public boolean isSubText() {
+      return isSubText;
+    }
+
+    public CharSequence getFinalizedText() {
+      return finalizedText;
     }
   }
 }

@@ -186,12 +186,13 @@ public class BrailleInputPlanePhone extends BrailleInputPlane {
     return screenSize;
   }
 
+  /** Change the direction of the swipe from device-facing to user-facing. */
   private Swipe getReorientedSwipe(Swipe swipe) {
     Swipe reorientedSwipe =
         (orientation == Configuration.ORIENTATION_PORTRAIT)
             ? Swipe.createFromRotation90(swipe)
             : new Swipe(swipe);
-    if (isTableTopMode) {
+    if (!isTableTopMode) {
       reorientedSwipe = Swipe.createFromMirror(reorientedSwipe);
     }
     return reorientedSwipe;

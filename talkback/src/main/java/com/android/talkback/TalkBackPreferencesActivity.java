@@ -24,7 +24,6 @@ import androidx.fragment.app.FragmentOnAttachListener;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.View;
-import androidx.annotation.VisibleForTesting;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.preference.Preference;
@@ -66,7 +65,7 @@ public class TalkBackPreferencesActivity extends PreferencesActivity
   protected void onCreate(@Nullable Bundle savedInstanceState) {
     // Must be called before super.onCreate
     assignSearchFragment(getIntent());
-
+    fillDefaultFragmentNameIfNecessary();
     getSupportFragmentManager().addFragmentOnAttachListener(this);
     super.onCreate(savedInstanceState);
 
@@ -100,7 +99,7 @@ public class TalkBackPreferencesActivity extends PreferencesActivity
   @Override
   public boolean onPreferenceStartFragment(PreferenceFragmentCompat caller, Preference pref) {
     // Fall back to the default implementation in PreferenceFragmentCompat for other form factors.
-    if (!FormFactorUtils.getInstance().isAndroidWear()) {
+    if (!FormFactorUtils.isAndroidWear()) {
       return false;
     }
 
@@ -156,10 +155,14 @@ public class TalkBackPreferencesActivity extends PreferencesActivity
   protected PreferenceFragmentCompat createPreferenceFragment() {
     Intent intent = getIntent();
     String fragmentName = null;
+    Bundle bundle = null;
     if (intent != null) {
       fragmentName = intent.getStringExtra(FRAGMENT_NAME);
+      bundle = intent.getBundleExtra(FRAGMENT_ARGS);
     }
-    return getFragmentByName(fragmentName);
+    PreferenceFragmentCompat fragment = getFragmentByName(fragmentName);
+    fragment.setArguments(bundle);
+    return fragment;
   }
 
   @Override
@@ -180,6 +183,21 @@ public class TalkBackPreferencesActivity extends PreferencesActivity
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException ex) {
       LogUtils.d(TAG, "Failed to load class: %s", fragmentName);
       return null;
+    }
+  }
+
+  // We try to fill the default fragment name for WearPreferenceActivity to initiate it for Wear.
+  private void fillDefaultFragmentNameIfNecessary() {
+    if (!FormFactorUtils.isAndroidWear()) {
+      return;
+    }
+    Intent intent = getIntent();
+    if (intent == null) {
+      return;
+    }
+    String fragmentName = intent.getStringExtra(FRAGMENT_NAME);
+    if (TextUtils.isEmpty(fragmentName)) {
+      intent.putExtra(FRAGMENT_NAME, TalkBackPreferenceFragment.class.getCanonicalName());
     }
   }
 
@@ -214,6 +232,5 @@ public class TalkBackPreferencesActivity extends PreferencesActivity
   }
 
   /** Activity to launch TalkBack settings fragment. It is used only for wear. */
-  @VisibleForTesting
   public static class TalkBackSubSettings extends TalkBackPreferencesActivity {}
 }

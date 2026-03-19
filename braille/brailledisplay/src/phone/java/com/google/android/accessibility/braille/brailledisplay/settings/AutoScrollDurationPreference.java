@@ -38,6 +38,8 @@ public class AutoScrollDurationPreference extends Preference {
   }
 
   @Override
+  // TODO: b/406086244 - Remove this suppression once the lint checker is fixed.
+  @SuppressWarnings("FlaggedApi")
   public void onBindViewHolder(PreferenceViewHolder holder) {
     super.onBindViewHolder(holder);
     holder.itemView.setClickable(false);

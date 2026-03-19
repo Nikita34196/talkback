@@ -37,7 +37,8 @@ public class AutoScrollActivity extends PreferencesActivity {
   }
 
   /** Fragment of AutoScrollActivity. */
-  public static final class AutoScrollFragment extends PreferenceFragmentCompat {
+    public static class AutoScrollFragment extends PreferenceFragmentCompat {
+
     private AutoScrollDurationPreference autoScrollDurationPref;
 
     @Override

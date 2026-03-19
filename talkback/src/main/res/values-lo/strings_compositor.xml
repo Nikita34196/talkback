@@ -27,16 +27,16 @@
   <string name="template_text_selected">%1$s, ເລືອກແລ້ວ</string>
   <string name="template_announce_selected_text">ຂໍ້ຄວາມທີ່ເລືອກແມ່ນ: %1$s</string>
   <string name="template_text_unselected">%1$s, ບໍ່ເລືອກແລ້ວ</string>
-  <string name="template_text_error">ການ​ປ້ອນ​ຂໍ້​ມູນ​ໃຊ້​ບໍ່​ໄດ້ %1$s</string>
+  <string name="template_text_error">ລະບຸຂໍ້ມູນບໍ່ຖືກຕ້ອງ: %1$s</string>
   <string name="template_replaced_characters">ແທນ​ທີ່ %1$s ໂຕ​ອັກ​ສອນ​ດ້ວຍ %2$s ໂຕ​ອັກ​ສອນ​ແລ້ວ</string>
   <string name="template_labeled_item">%1$s ສຳ​ລັບ %2$s</string>
-  <string name="template_percent">%1$s ເປີເຊັນ</string>
+  <string name="tb_template_percent">%1$s ເປີເຊັນ</string>
   <string name="template_value">%1$s</string>
   <plurals name="template_containers">
     <item quantity="one">%1$s ກຳລັງສະແດງ %2$d ລາຍການ</item>
     <item quantity="other">%1$s ກຳລັງສະແດງ %2$d ລາຍການ</item>
   </plurals>
-  <string name="template_node_error_with_error_message">Error: %1$s</string>
+  <string name="template_node_error_with_error_message">ຂໍ້ຜິດພາດ: %1$s</string>
   <string name="value_gridview">ຕາໜ່າງ</string>
   <string name="value_listview">​ລາຍ​ຊື່</string>
   <string name="value_tabwidget">ແຖບ</string>
@@ -60,16 +60,23 @@
   <string name="value_text_cleared">​ລຶບລ້າງ​ຂໍ້ຄວາມແລ້ວ</string>
   <string name="value_text_max_length">ຮອດ​ຄວາມ​ຍາວ​ສູງ​ສຸດ​ແລ້ວ</string>
   <string name="value_selected">ເລືອກແລ້ວ</string>
+  <string name="value_not_selected">ບໍ່ຖືກເລືອກ</string>
   <string name="value_checked">ເລືອກ​ແລ້ວ</string>
   <string name="value_not_checked">ບໍ່ໄດ້ເລືອກ</string>
+  <string name="value_partially_checked">ເລືອກໄວ້ບາງສ່ວນ</string>
   <string name="value_on">ເປີດ</string>
   <string name="value_off">ປິດ</string>
   <string name="value_disabled">ປິດການນຳໃຊ້</string>
   <string name="value_enabled">ເປີດການນຳໃຊ້ແລ້ວ</string>
+  <string name="value_read_only">ອ່ານເທົ່ານັ້ນ</string>
   <string name="value_expanded">ຂະຫຍາຍແລ້ວ</string>
+  <string name="value_fully_expanded">ຂະຫຍາຍເຕັມທີ່</string>
+  <string name="value_partially_expanded">ຂະຫຍາຍບາງສ່ວນ</string>
   <string name="value_collapsed">ຫຍໍ້ແລ້ວ</string>
   <string name="value_double_tap">ແຕະສອງເທື່ອ</string>
   <string name="value_single_tap">​ແຕະ</string>
+  <string name="value_double_tap_xr">ບີບນິ້ວສອງເທື່ອ</string>
+  <string name="value_single_tap_xr">ບີບນິ້ວ</string>
   <string name="value_press_select">ກົດເລືອກ</string>
   <string name="template_hint_clickable">%1$s ເພື່ອເປີດໃຊ້</string>
   <string name="template_hint_clickable_keyboard">ກົດ %1$s ເພື່ອເປີດໃຊ້</string>
@@ -79,6 +86,7 @@
   <string name="template_hint_checkable_keyboard">ກົດ %1$s ເພື່ອສະຫຼັບ</string>
   <string name="template_hint_adjustable_2gesture">\"%1$s\" ຫຼື \"%2$s\" ເພື່ອປັບແກ້</string>
   <string name="template_hint_adjustable_1gesture">\"%1$s\" ເພື່ອປັບແກ້</string>
+  <string name="template_hint_wear_input_focused_adjustable">ໃຊ້ການປັດ 2 ນິ້ວ ຫຼື ໝຸນປຸ່ມກະດຸມ ຫຼື ບີເຊວເພື່ອປ່ຽນ</string>
   <string name="template_hint_edit_text">%1$s ເພື່ອແກ້ໄຂຂໍ້ຄວາມ</string>
   <string name="template_hint_edit_text_keyboard">ກົດ %1$s ເພື່ອແກ້ໄຂຂໍ້ຄວາມ</string>
   <string name="template_hint_spinner">%1$s ເພື່ອປ່ຽນແປງ</string>
@@ -91,6 +99,8 @@
   <string name="template_custom_hint_for_actions">%1$s ຫາ %2$s</string>
   <string name="template_custom_hint_for_actions_keyboard">ກົດ %1$s ເພື່ອ %2$s</string>
   <string name="template_custom_hint_for_long_clickable_actions">%1$s ຄ້າງໄວ້ເພື່ອ %2$s</string>
+  <string name="template_hint_clickable_link">%1$s ເພື່ອເປີດລິ້ງ</string>
+  <string name="template_hint_clickable_link_keyboard">ກົດ %1$s ເພື່ອເປີດລິ້ງ</string>
   <string name="value_caps_lock_on">Caps Lock ເປີດ</string>
   <string name="value_caps_lock_off">Caps Lock ປິດ</string>
   <string name="value_num_lock_on">Num Lock ເປີດ</string>
@@ -148,6 +158,10 @@
     <item quantity="one">%1$d ຖັນ</item>
     <item quantity="other">%1$d ຖັນ</item>
   </plurals>
+  <plurals name="template_list_item_count">
+    <item quantity="one">%1$d ລາຍການ, ລະເວັ້ນ %2$d ລາຍການ</item>
+    <item quantity="other">%1$d ລາຍການ, ລະເວັ້ນ %2$d ລາຍການ</item>
+  </plurals>
   <plurals name="template_password_character_count">
     <item quantity="one">%1$d ຕົວອັກສອນ</item>
     <item quantity="other">%1$d ຕົວອັກສອນ</item>
@@ -160,12 +174,16 @@
   <string name="template_partial_magnification_scale_changed">ການຂະຫຍາຍແບບບາງສ່ວນ %1$d%%</string>
   <string name="magnification_off">ປິດການຂະຫຍາຍແລ້ວ</string>
   <string name="template_speech_rate_change">ຄວາມໄວການເວົ້າ %1$d%%</string>
-  <string name="template_volume_change_increase">ເພີ່ມ</string>
-  <string name="template_volume_change_decrease">ຫຼຸດ</string>
+  <string name="template_accessibility_volume_change_increase">ເພີ່ມລະດັບສຽງການຊ່ວຍເຂົ້າເຖິງເປັນ %1$d ເປີເຊັນ.</string>
+  <string name="template_accessibility_volume_change_decrease">ຫຼຸດລະດັບສຽງການຊ່ວຍເຂົ້າເຖິງເປັນ %1$d ເປີເຊັນ.</string>
+  <string name="template_touch_explore_latency_changed">ຄວາມຫຼ້າຊ້າໂຟກັສການພິມ: %1$d ມິລິວິນາທີ.</string>
+  <string name="template_touch_latency_reach_maximum">ສູງສຸດ</string>
+  <string name="template_touch_latency_reach_minimum">ຕ່ຳສຸດ</string>
   <string name="template_volume_change_maximum">​ສູງ​ສຸດ</string>
   <string name="template_volume_change_minimum">ຕໍ່າສຸດ</string>
+  <string name="template_volume_change_volume_up_curved_text">ເພີ່ມຂຶ້ນ</string>
+  <string name="template_volume_change_volume_down_curved_text">ຫຼຸດລົງ</string>
   <string name="template_seekbar_range">%1$d%%</string>
-  <string name="summaryOff_pref_speak_passwords_without_headphones">ເວົ້າລະຫັດຜ່ານສະເພາະເມື່ອໃຊ້ຫູຟັງຢູ່ເທົ່ານັ້ນ</string>
   <string name="template_hint_menu_type_high_verbosity">%1$s ສາມາດໃຊ້ໄດ້, ໃຊ້ %2$s ເພື່ອເບິ່ງ</string>
   <string name="template_hint_for_reading_control_actions_in_high_verbosity">%1$s ມີໃຫ້ໃຊ້, %2$s ແລະ ແຕະ​ສອງ​ເທື່ອເພື່ອເປີດໃຊ້</string>
   <string name="hint_suggestion">ການພິສູດອັກສອນມີໃຫ້ໃຊ້</string>

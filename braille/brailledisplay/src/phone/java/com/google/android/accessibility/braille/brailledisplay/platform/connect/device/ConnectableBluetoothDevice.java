@@ -17,6 +17,8 @@
 package com.google.android.accessibility.braille.brailledisplay.platform.connect.device;
 
 import android.bluetooth.BluetoothDevice;
+import android.os.Build;
+import android.text.TextUtils;
 import com.google.auto.value.AutoValue;
 
 /** Bluetooth connectable device. */
@@ -27,12 +29,31 @@ public abstract class ConnectableBluetoothDevice extends ConnectableDevice {
 
   @Override
   public String name() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      return bluetoothDevice().getAlias();
+    }
     return bluetoothDevice().getName();
   }
 
   @Override
   public String address() {
     return bluetoothDevice().getAddress();
+  }
+
+  /** Returns a string with masked name and masked address. */
+  @Override
+  public final String toString() {
+    String address = address();
+    if (!TextUtils.isEmpty(address)) {
+      char[] masked = address().toCharArray();
+      for (int i = 0; i < masked.length - 5; i++) {
+        if (masked[i] != ':') {
+          masked[i] = 'x';
+        }
+      }
+      address = new String(masked);
+    }
+    return truncatedName() + "(" + address + ")";
   }
 
   public static ConnectableBluetoothDevice.Builder builder() {

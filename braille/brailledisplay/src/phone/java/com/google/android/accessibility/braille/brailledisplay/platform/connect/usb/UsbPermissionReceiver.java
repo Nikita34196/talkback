@@ -23,7 +23,7 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Bundle;
-import com.google.android.accessibility.braille.brailledisplay.platform.lib.ActionReceiver;
+import com.google.android.accessibility.braille.common.lib.ActionReceiver;
 
 /** A registered BroadcastReceiver that informs us of USB state changes. */
 public class UsbPermissionReceiver

@@ -2,7 +2,7 @@
 /*
  * libbrlapi - A library providing access to braille terminals for applications.
  *
- * Copyright (C) 2002-2023 by
+ * Copyright (C) 2002-2024 by
  *   Samuel Thibault <Samuel.Thibault@ens-lyon.org>
  *   Sébastien Hinderer <Sebastien.Hinderer@ens-lyon.org>
  *
@@ -35,7 +35,7 @@ extern "C" {
  * @{ */
 
 /** Library version. */
-#define BRLAPI_RELEASE "0.8.5"
+#define BRLAPI_RELEASE "0.8.6"
 
 /** Library major version. */
 #define BRLAPI_MAJOR 0
@@ -44,7 +44,7 @@ extern "C" {
 #define BRLAPI_MINOR 8
 
 /** Library revision. */
-#define BRLAPI_REVISION 5
+#define BRLAPI_REVISION 6
 
 /** Returns the version of the library */
 void brlapi_getLibraryVersion(int *major, int *minor, int *revision);
@@ -519,8 +519,8 @@ int BRLAPI_STDCALL brlapi__setFocus(brlapi_handle_t *handle, int tty);
  * After brlapi_enterTtyMode() has been called, the application can
  * call one of these functions to write things on the braille display.
  *
- * \note Be sure to call brlapi_enterTtyMode() \e before calling brlapi_write(),
- * or else you'll get an error. This is particularly not always trivial when
+ * \note Be sure to call brlapi_enterTtyMode() \e before calling brlapi_write(), or
+ * else you'll get an error. This is particularly not always trivial when
  * writing multithreaded applications.
  *
  * \note Dots are coded as described in ISO/TR 11548-1: a dot pattern is coded
@@ -598,12 +598,7 @@ int BRLAPI_STDCALL brlapi__writeDots(brlapi_handle_t *handle, const unsigned cha
 /** Structure containing arguments to be given to brlapi_write() */
 typedef struct {
   int displayNumber /** Display number ::BRLAPI_DISPLAY_DEFAULT == unspecified */;
-  unsigned int
-      regionBegin /** Region of display to update, 1st character of display is
-                     1, 1st character of the second line of display is the width
-                     of a line plus 1, etc. Regions are always a linear wrap
-                     over the different lines. */
-      ;
+  unsigned int regionBegin /** Region of display to update, 1st character of display is 1, 1st character of the second line of display is the width of a line plus 1, etc. Regions are always a linear wrap over the different lines. */;
   int regionSize /** Number of characters held in andMask and orMask. If negative, its absolute value is taken into account, and the output is padded or truncated to fill the rest of the display. */;
   const char *text /** Text to display, must hold as many characters as the region fields expresses. */;
   int textSize /** Size of text in bytes. If -1, strlen() is used for computing it. */;

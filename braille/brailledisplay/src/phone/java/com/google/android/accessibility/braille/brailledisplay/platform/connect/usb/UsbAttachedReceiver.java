@@ -22,7 +22,7 @@ import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.device.ConnectableDevice;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.device.ConnectableUsbDevice;
-import com.google.android.accessibility.braille.brailledisplay.platform.lib.ActionReceiver;
+import com.google.android.accessibility.braille.common.lib.ActionReceiver;
 
 /** Detects usb attach/detach events. */
 public class UsbAttachedReceiver

@@ -15,53 +15,47 @@
  */
 package com.google.android.accessibility.talkback.preference.base;
 
-import static com.google.android.accessibility.talkback.preference.PreferencesActivityUtils.HELP_URL;
 import static com.google.android.accessibility.talkback.trainingcommon.TrainingUtils.GUP_SUPPORT_PORTAL_URL;
 
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.PackageManager.NameNotFoundException;
-import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.Preference.OnPreferenceChangeListener;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceGroup;
+import androidx.preference.TwoStatePreference;
 import com.android.talkback.TalkBackPreferencesActivity.HatsRequesterViewModel;
 import com.google.android.accessibility.talkback.HatsSurveyRequester;
 import com.google.android.accessibility.talkback.HelpAndFeedbackUtils;
 import com.google.android.accessibility.talkback.NotificationActivity;
 import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.TalkBackExitController;
 import com.google.android.accessibility.talkback.TalkBackService;
 import com.google.android.accessibility.talkback.actor.ImageCaptioner;
+import com.google.android.accessibility.talkback.preference.base.PreferenceActionHelper.WebPage;
 import com.google.android.accessibility.talkback.training.OnboardingInitiator;
 import com.google.android.accessibility.talkback.training.TutorialInitiator;
 import com.google.android.accessibility.talkback.trainingcommon.tv.TvTutorialInitiator;
 import com.google.android.accessibility.talkback.trainingcommon.tv.VendorConfigReader;
-import com.google.android.accessibility.talkback.utils.RemoteIntentUtils;
 import com.google.android.accessibility.utils.FeatureSupport;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.accessibility.utils.NetworkUtils;
-import com.google.android.accessibility.utils.PackageManagerUtils;
 import com.google.android.accessibility.utils.PreferenceSettingsUtils;
 import com.google.android.accessibility.utils.SettingsUtils;
 import com.google.android.accessibility.utils.SharedPreferencesUtils;
-import java.util.List;
+import com.google.android.accessibility.utils.monitor.InputDeviceMonitor;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Fragment that holds the preference of Talkback settings. */
 public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
   private Context context;
-  private final FormFactorUtils formFactorUtils = FormFactorUtils.getInstance();
   private SharedPreferences prefs;
   private SettingsMetricStore settingsMetricStore;
 
@@ -102,22 +96,15 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
 
     assignNewFeaturesIntent();
 
-    showTalkBackVersion();
-
-    if (SettingsUtils.allowLinksOutOfSettings(context) || formFactorUtils.isAndroidTv()) {
-      assignTtsSettingsIntent();
-
-      // We should never try to open the play store in WebActivity.
-      assignPlayStoreIntentToPreference();
-    } else {
-      // During setup, do not allow access to web.
+    // Hiding Speech Rate Settings for all surfaces except Android TV.
+    if (!FormFactorUtils.isAndroidTv()) {
       PreferenceSettingsUtils.hidePreference(
-          context, getPreferenceScreen(), R.string.pref_play_store_key);
-      removeCategory(R.string.pref_category_legal_and_privacy_key);
+          context, getPreferenceScreen(), R.string.pref_speech_rate_key);
+    }
 
-      // During setup, do not allow access to other apps via custom-labeling.
-      removePreference(R.string.pref_category_advanced_key, R.string.pref_manage_labels_key);
-
+    if (SettingsUtils.allowLinksOutOfSettings(context) || FormFactorUtils.isAndroidTv()) {
+      assignTtsSettingsIntent();
+    } else {
       // During setup, do not allow access to main settings via text-to-speech settings.
       removePreference(R.string.pref_category_audio_key, R.string.pref_tts_settings_key);
     }
@@ -130,13 +117,28 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
       }
     }
 
+    updatePhysicalKeyboardPreference();
+
     // Remove braille category if none of braille feature supported.
     if (!FeatureSupport.supportBrailleDisplay(context)
         && !FeatureSupport.supportBrailleKeyboard(context)) {
       removeCategory(R.string.pref_category_braille_key);
+    } else {
+      boolean isMultiTouchSupported =
+          context
+              .getPackageManager()
+              .hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN_MULTITOUCH_JAZZHAND);
+      if (!isMultiTouchSupported) {
+        final Preference brailleKeyboardCategory =
+            findPreferenceByResId(R.string.pref_brailleime_key);
+        if (brailleKeyboardCategory != null) {
+          brailleKeyboardCategory.setEnabled(false);
+          brailleKeyboardCategory.setSummary(R.string.summary_pref_brailleime_disabled);
+        }
+      }
     }
 
-    if (formFactorUtils.isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv()) {
       Preference preference = findPreferenceByResId(R.string.pref_tutorial_and_help_key);
       if (preference != null) {
         preference.setTitle(
@@ -145,22 +147,22 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
                 : R.string.title_pref_category_help_no_tutorial);
         preference.setFragment(TutorialAndHelpFragment.class.getName());
       }
-    } else if (formFactorUtils.isAndroidWear()) {
+    } else if (FormFactorUtils.isAndroidWear()) {
       Preference prefTutorial = findPreferenceByResId(R.string.pref_tutorial_key);
       if (prefTutorial != null) {
         prefTutorial.setIntent(TutorialInitiator.createTutorialIntent(getActivity()));
       }
       Preference prefHelp = findPreferenceByResId(R.string.pref_help_key);
       if (prefHelp != null) {
-        RemoteIntentUtils.assignWebIntentToPreference(this, prefHelp, HELP_URL);
+        // Only Wear has this preference in this fragment.
+        PreferenceActionHelper.assignWebIntentToPreference(this, prefHelp, WebPage.WEB_PAGE_HELP);
       }
     } else {
       updateTutorialAndHelpPreferencesForPhoneOrTablet();
     }
 
     if (!ImageCaptioner.supportsImageCaption(context)) {
-      removePreference(
-          R.string.pref_category_controls_key, R.string.pref_auto_image_captioning_key);
+      removePreference(R.string.pref_category_audio_key, R.string.pref_auto_image_captioning_key);
     }
     updateGeminiPreferenceState();
   }
@@ -190,11 +192,16 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
     }
     preference = findPreferenceByResId(R.string.pref_help_and_feedback_key);
     if (preference != null) {
-      preference.setOnPreferenceClickListener(
-          preference1 -> {
-            HelpAndFeedbackUtils.launchHelpAndFeedback(getActivity());
-            return true;
-          });
+      if (HelpAndFeedbackUtils.supportsHelpAndFeedback(context)) {
+        preference.setOnPreferenceClickListener(
+            preference1 -> {
+              HelpAndFeedbackUtils.launchHelpAndFeedback(getActivity());
+              return true;
+            });
+      } else {
+        preference.setTitle(R.string.title_pref_help);
+        PreferenceActionHelper.assignWebIntentToPreference(this, preference, WebPage.WEB_PAGE_HELP);
+      }
     }
     preference = findPreferenceByResId(R.string.pref_gup_key);
     if (preference != null) {
@@ -211,11 +218,35 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
     }
   }
 
+  private void updatePhysicalKeyboardPreference() {
+    Preference preference = findPreferenceByResId(R.string.pref_physical_keyboard_key);
+    if (preference == null) {
+      return;
+    }
+
+    // Assign physical keyboard settings if it is available.
+    InputDeviceMonitor inputDeviceMonitor = new InputDeviceMonitor(context);
+    if (inputDeviceMonitor.hasPhysicalKeyboard()) {
+      Intent intent = new Intent(Settings.ACTION_HARD_KEYBOARD_SETTINGS);
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+      if (PreferenceSettingsUtils.canHandleIntent(context, intent)) {
+        preference.setIntent(intent);
+      }
+    } else {
+      removePreference(R.string.pref_category_typing_key, R.string.pref_physical_keyboard_key);
+    }
+  }
+
   @Override
   public void onResume() {
     super.onResume();
     updateSurveyOption();
     updateGeminiPreferenceState();
+    updatePhysicalKeyboardPreference();
+    updateTtsOverlay();
+
+    // Disable watermark when user enters TalkBack settings.
+    disableTalkBackExitWatermark();
   }
 
   @Override
@@ -238,49 +269,6 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
     }
   }
 
-  private void assignPlayStoreIntentToPreference() {
-
-    Preference pref = findPreferenceByResId(R.string.pref_play_store_key);
-    if (pref == null) {
-      return;
-    }
-
-    PreferenceGroup category =
-        (PreferenceGroup) findPreferenceByResId(R.string.pref_category_general_key);
-    if (!getResources().getBoolean(R.bool.show_play_store)) {
-      if (category != null) {
-        category.removePreference(pref);
-      }
-      return;
-    }
-
-    String packageName = PackageManagerUtils.TALKBACK_PACKAGE;
-
-    Uri uri;
-    if (formFactorUtils.isAndroidWear()) {
-      // Only for watches, try the "market://" URL first. If there is a Play Store on the
-      // device, this should succeed. Only for LE devices, there will be no Play Store.
-      uri = Uri.parse("market://details?id=" + packageName);
-    } else {
-      uri = Uri.parse("https://play.google.com/store/apps/details?id=" + packageName);
-    }
-
-    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-    if (canHandleIntent(intent)) {
-      pref.setIntent(intent);
-    } else {
-      if (category != null) {
-        category.removePreference(pref);
-      }
-    }
-  }
-
-  private boolean canHandleIntent(Intent intent) {
-    PackageManager manager = context.getPackageManager();
-    List<ResolveInfo> infos = manager.queryIntentActivities(intent, 0);
-    return infos != null && !infos.isEmpty();
-  }
-
   /** Assigns the intent to open text-to-speech settings. */
   private void assignTtsSettingsIntent() {
     PreferenceGroup category =
@@ -291,12 +279,14 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
       return;
     }
 
-    final String intentId =
-        formFactorUtils.isAndroidTv()
-            ? TalkBackService.INTENT_TTS_TV_SETTINGS
-            : TalkBackService.INTENT_TTS_SETTINGS;
-    Intent ttsSettingsIntent = new Intent(intentId);
-    if (!canHandleIntent(ttsSettingsIntent)) {
+    // Removing Text-to-Speech Settings for TV.
+    if (FormFactorUtils.isAndroidTv()) {
+      category.removePreference(ttsSettingsPreference);
+      return;
+    }
+
+    Intent ttsSettingsIntent = new Intent(TalkBackService.INTENT_TTS_SETTINGS);
+    if (!PreferenceSettingsUtils.canHandleIntent(context, ttsSettingsIntent)) {
       // Need to remove preference item if no TTS Settings intent filter in settings app.
       category.removePreference(ttsSettingsPreference);
     }
@@ -312,12 +302,12 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
       return;
     }
 
-    if (formFactorUtils.isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv() || FormFactorUtils.isAndroidXr()) {
       return;
     }
 
     Intent newFeatureIntent;
-    if (formFactorUtils.isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       newFeatureIntent =
           NotificationActivity.createStartIntent(
               context,
@@ -362,6 +352,24 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
         });
   }
 
+  private void updateTtsOverlay() {
+    final TwoStatePreference preference =
+        (TwoStatePreference) findPreferenceByResId(R.string.pref_tts_overlay_key);
+    if (preference == null) {
+      return;
+    }
+    boolean prefValue =
+        SharedPreferencesUtils.getBooleanPref(
+            prefs,
+            context.getResources(),
+            R.string.pref_tts_overlay_key,
+            context.getResources().getBoolean(R.bool.pref_tts_overlay_default));
+    if (prefValue == preference.isChecked()) {
+      return;
+    }
+    preference.setChecked(prefValue);
+  }
+
   /**
    * Since the "%s" summary is currently broken, this sets the preference change listener for all
    * {@link ListPreference} views to fill in the summary with the current entry value.
@@ -390,34 +398,15 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
     }
   }
 
-  private static @Nullable PackageInfo getPackageInfo(Context context) {
-    try {
-      return context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
-    } catch (NameNotFoundException e) {
-      return null;
-    }
-  }
-
-  /** Show TalkBack version in the Play Store button. */
-  private void showTalkBackVersion() {
-    PackageInfo packageInfo = getPackageInfo(context);
-    if (packageInfo == null) {
+  private void disableTalkBackExitWatermark() {
+    TalkBackService service = TalkBackService.getInstance();
+    if (service == null) {
       return;
     }
-    final Preference playStoreButton = findPreferenceByResId(R.string.pref_play_store_key);
-    if (playStoreButton == null) {
-      return;
+    TalkBackExitController talkBackExitController = service.getTalkBackExitController();
+    if (talkBackExitController != null && talkBackExitController.isTalkBackExitWatermarkShown()) {
+      talkBackExitController.disableTalkBackExitWatermark(service);
     }
-    Pattern pattern = Pattern.compile("[0-9]+\\.[0-9]+");
-    Matcher matcher = pattern.matcher(String.valueOf(packageInfo.versionName));
-    String summary;
-    if (matcher.find()) {
-      summary = getString(R.string.summary_pref_play_store, matcher.group());
-    } else {
-      summary =
-          getString(R.string.summary_pref_play_store, String.valueOf(packageInfo.versionName));
-    }
-    playStoreButton.setSummary(summary);
   }
 
   /**
@@ -433,6 +422,13 @@ public class TalkBackPreferenceFragment extends TalkbackBaseFragment {
             final ListPreference listPreference = (ListPreference) preference;
             final int index = listPreference.findIndexOfValue((String) newValue);
             final CharSequence[] entries = listPreference.getEntries();
+
+            // Ignore Setting speech rate summary.
+            if (listPreference
+                .getKey()
+                .equals(getContext().getString(R.string.pref_speech_rate_key))) {
+              return true;
+            }
 
             if (index >= 0 && index < entries.length) {
               preference.setSummary(entries[index].toString().replaceAll("%", "%%"));

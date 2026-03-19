@@ -21,7 +21,6 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import android.content.Context;
 import androidx.annotation.StringRes;
 import androidx.core.content.res.ResourcesCompat;
-import com.google.android.accessibility.braille.common.FeatureFlagReader;
 import com.google.android.accessibility.braille.common.R;
 import com.google.android.accessibility.braille.common.TalkBackSpeaker;
 import com.google.android.accessibility.braille.translate.BrailleTranslator;
@@ -577,23 +576,6 @@ public class BrailleLanguages {
         R.string.code_user_facing_name_khmer,
         /* supportedContracted= */ false,
         /* eightDot= */ false),
-    KOREAN(
-        LOCALE_KO,
-        R.string.code_user_facing_name_korean,
-        /* supportedContracted= */ true,
-        /* eightDot= */ false) {
-      @Override
-      EditBuffer createEditBuffer(
-          Context context,
-          TalkBackSpeaker talkBack,
-          BrailleTranslator translator,
-          boolean contractedMode) {
-        if (contractedMode) {
-          return new EditBufferKorean2(context, translator, talkBack);
-        }
-        return new EditBufferKorean(context, translator, talkBack);
-      }
-    },
     KOREAN_2006(
         LOCALE_KO,
         R.string.code_user_facing_name_korean_2006,
@@ -1026,26 +1008,8 @@ public class BrailleLanguages {
 
     public boolean isAvailable(Context context) {
       if (stringId != ResourcesCompat.ID_NULL) {
-        if (this == KOREAN || this == KOREAN_2006) {
-          return FeatureFlagReader.useKorean(context);
-        } else if (this == JAPANESE) {
-          return FeatureFlagReader.useJapanese(context);
-        } else if (this == CANTONESE) {
-          return FeatureFlagReader.useCantonese(context);
-        } else if (this == CHINESE_CHINA_COMMON) {
-          return FeatureFlagReader.useChineseChinaCommon(context);
-        } else if (this == CHINESE_CHINA_CURRENT_WITH_TONES) {
-          return FeatureFlagReader.useChineseChinaCurrentWithTones(context);
-        } else if (this == CHINESE_CHINA_CURRENT_WITHOUT_TONES) {
-          return FeatureFlagReader.useChineseChinaCurrentWithoutTones(context);
-        } else if (this == CHINESE_CHINA_TWO_CELLS) {
-          return FeatureFlagReader.useChineseChinaTwoCells(context);
-        } else if (this == CHINESE_TAIWAN) {
-          return FeatureFlagReader.useChineseTaiwan(context);
-        } else if (this == NORWEGIAN_COMP8) {
-          return FeatureFlagReader.useNorwegian8DotComputer(context);
-        } else if (this == BULGARIAN_COMP8) {
-          return FeatureFlagReader.useBulgarian8DotComputer(context);
+        switch (this) {
+          default -> {}
         }
         return true;
       }
@@ -1067,40 +1031,7 @@ public class BrailleLanguages {
     /** Returns whether BrailleIme supports contracted mode, depends on the feature flag. */
     public boolean isSupportsContracted(Context context) {
       switch (this) {
-        case EN_US_EBAE:
-          return FeatureFlagReader.useEBAEContracted(context);
-        case EN_UK:
-          return FeatureFlagReader.useBritishContracted(context);
-        case WELSH:
-          return FeatureFlagReader.useWelshContracted(context);
-        case ARABIC:
-          return FeatureFlagReader.useArabicContracted(context);
-        case FRENCH:
-          return FeatureFlagReader.useFrenchContracted(context);
-        case SPANISH:
-          return FeatureFlagReader.useSpanishContracted(context);
-        case VIETNAMESE:
-          return FeatureFlagReader.useVietnameseContracted(context);
-        case GERMAN:
-          return FeatureFlagReader.useGermanContracted(context);
-        case NORWEGIAN:
-          return FeatureFlagReader.useNorwegianContracted(context);
-        case PORTUGUESE:
-          return FeatureFlagReader.usePortugueseContracted(context);
-        case HUNGARIAN:
-          return FeatureFlagReader.useHungarianContracted(context);
-        case DANISH:
-          return FeatureFlagReader.useDanishContracted(context);
-        case TURKISH:
-          return FeatureFlagReader.useTurkishContracted(context);
-        case URDU:
-          return FeatureFlagReader.useUrduContracted(context);
-        case SWEDEN:
-          return FeatureFlagReader.useSwedenContracted(context);
-        case DANISH_8:
-          return FeatureFlagReader.useDanish8DotContracted(context);
-        default:
-          // fall through
+        default -> {}
       }
       return supportsContracted;
     }

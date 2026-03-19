@@ -61,7 +61,8 @@ public class LocaleLanguageActivity extends PreferencesActivity {
   }
 
   /** Preferred language pick up fragment based on specific locale. */
-  public static class PreferredLocaleLanguageFragment extends PreferenceFragmentCompat {
+    public static class PreferredLocaleLanguageFragment extends PreferenceFragmentCompat {
+
     private PreferenceCategory languages;
     private Locale locale;
 

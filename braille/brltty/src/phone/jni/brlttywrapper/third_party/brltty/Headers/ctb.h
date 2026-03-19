@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -40,15 +40,15 @@ extern char *makeContractionTablePath (const char *directory, const char *name);
 extern char *getContractionTableForLocale (const char *directory);
 extern int replaceContractionTable (const char *directory, const char *name);
 
-extern void contractText(
-    ContractionTable *contractionTable, /* Pointer to translation table */
-    ContractionCache *contractionCache,
-    const wchar_t *inputBuffer,  /* What is to be translated */
-    int *inputLength,            /* Its length */
-    unsigned char *outputBuffer, /* Where the translation is to go */
-    int *outputLength,           /* length of this area */
-    int *offsetsMap, /* Array of offsets of translated chars in source */
-    int cursorOffset /* Position of coursor in source */
+extern void contractText (
+  ContractionTable *contractionTable, /* Pointer to translation table */
+  ContractionCache *contractionCache,
+  const wchar_t *inputBuffer, /* What is to be translated */
+  int *inputLength, /* Its length */
+  unsigned char *outputBuffer, /* Where the translation is to go */
+  int *outputLength, /* length of this area */
+  int *offsetsMap, /* Array of offsets of translated chars in source */
+  int cursorOffset /* Position of coursor in source */
 );
 
 #ifdef __cplusplus

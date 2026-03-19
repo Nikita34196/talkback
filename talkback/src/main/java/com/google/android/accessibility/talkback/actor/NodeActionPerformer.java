@@ -59,7 +59,8 @@ public class NodeActionPerformer {
       long time = SystemClock.uptimeMillis();
       success = nodeActionTarget.performAction(nodeAction.actionId(), nodeAction.args(), eventId);
       Performance.getInstance()
-          .onAccessibilityActionPerformed(eventId, nodeAction.actionId(), time, success);
+          .onAccessibilityActionPerformed(
+              eventId, nodeAction.actionId(), time, success, nodeActionTarget);
       if (success) {
         setNodeActionRecord(new NodeActionRecord(nodeAction.actionId(), nodeActionTarget, time));
       }

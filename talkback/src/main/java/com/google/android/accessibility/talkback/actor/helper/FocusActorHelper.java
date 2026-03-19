@@ -15,6 +15,9 @@
  */
 package com.google.android.accessibility.talkback.actor.helper;
 
+import static com.google.android.accessibility.utils.monitor.InputModeTracker.INPUT_MODE_KEYBOARD;
+
+import android.content.Context;
 import android.content.pm.ResolveInfo;
 import android.text.TextUtils;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -22,11 +25,16 @@ import android.view.accessibility.AccessibilityWindowInfo;
 import androidx.annotation.Nullable;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.talkback.PackageNameProvider;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.talkback.focusmanagement.interpreter.ScreenState;
+import com.google.android.accessibility.talkback.focusmanagement.record.FocusActionInfo;
+import com.google.android.accessibility.talkback.keyboard.KeyComboManagerHelper;
 import com.google.android.accessibility.utils.AccessibilityWindowInfoUtils;
+import com.google.android.accessibility.utils.BuildVersionUtils;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import java.util.List;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /** A helper class for handling common logic in the family of FocusActor. */
 public final class FocusActorHelper {
@@ -43,7 +51,7 @@ public final class FocusActorHelper {
   public static boolean shouldMuteFeedbackForFocusedNode(
       AccessibilityNodeInfoCompat nodeToFocus, ScreenState screenState) {
     // We mute the feedback of focused node only when it wakes up on the Home Screen and not on CB.
-    return FormFactorUtils.getInstance().isAndroidWear()
+    return FormFactorUtils.isAndroidWear()
         && screenState.isInterpretFirstTimeWhenWakeUp()
         && isHomeScreenShowing(screenState.getActiveWindow());
   }
@@ -89,7 +97,7 @@ public final class FocusActorHelper {
 
     // Look for an active focused window with a package name that matches
     // the default home screen.
-    if (!FormFactorUtils.getInstance().isAndroidAuto()) {
+    if (!FormFactorUtils.isAndroidAuto()) {
       // Auto does not set its home screen app as active+focused, so only non-auto
       // devices enforce that the home screen is active+focused.
       if (!windowInfo.isActive() || !windowInfo.isFocused()) {
@@ -114,6 +122,47 @@ public final class FocusActorHelper {
 
     LogUtils.v(LOG_TAG, "The active window is not the Home screen.");
     return false;
+  }
+
+  /** Whether the input focus should be synced to the accessibility focus. */
+  public static boolean shouldSyncInputFocusToAccessibilityFocus(
+      @NonNull Context context,
+      @NonNull AccessibilityNodeInfoCompat node,
+      @NonNull FocusActionInfo focusActionInfo) {
+    if (!node.isFocusable() || node.isFocused()) {
+      return false;
+    }
+    // On TV, we always keep input focus synchronized with the accessibility focus.
+    if (FormFactorUtils.isAndroidTv()) {
+      return true;
+    }
+
+    if (isKeyboardNavigation(focusActionInfo)) {
+      if (FeatureFlagReader.enableSynchronizedFocusWithKeyboardNavigation(context)) {
+        return true;
+      } else if (KeyComboManagerHelper.isSmartBrowseModeEnabled(context)
+          && KeyComboManagerHelper.shouldTurnOffBrowseMode(node)) {
+        return true;
+      }
+    }
+    // TODO: b/249453158 - Input focus should follow accessibility focus when the device is
+    // connecting to an external keyboard without the soft keyboard being on screen.
+
+    return false;
+  }
+
+  /** Whether to clear the input focus after setting the accessibility focus. */
+  public static boolean shouldClearFocusAfterSetAccessibilityFocus(
+      @NonNull Context context, @NonNull FocusActionInfo focusActionInfo) {
+    return FeatureFlagReader.clearFocusAfterSetAccessibilityFocus(context)
+        && isKeyboardNavigation(focusActionInfo)
+        && BuildVersionUtils.isAtLeastBaklava()
+        && !FormFactorUtils.isAndroidTv();
+  }
+
+  private static boolean isKeyboardNavigation(@NonNull FocusActionInfo focusActionInfo) {
+    return focusActionInfo.navigationAction != null
+        && focusActionInfo.navigationAction.inputMode == INPUT_MODE_KEYBOARD;
   }
 
   private FocusActorHelper() {}

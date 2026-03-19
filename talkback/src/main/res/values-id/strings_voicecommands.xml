@@ -54,7 +54,7 @@
   <string name="voice_commands_Spell">Eja</string>
   <string name="voice_commands_talkback_settings">Setelan TalkBack</string>
   <string name="voice_commands_talkback_setting">Setelan TalkBack</string>
-  <string name="voice_commands_screen_search">Cari cepat</string>
+  <string name="voice_commands_screen_search">Telusuri layar</string>
   <string name="voice_commands_search_on_screen">Telusuri di layar</string>
   <string name="voice_commands_copy">@android:string/copy</string>
   <string name="voice_commands_cut">@android:string/cut</string>

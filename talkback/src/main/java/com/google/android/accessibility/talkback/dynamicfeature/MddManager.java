@@ -17,6 +17,7 @@
 package com.google.android.accessibility.talkback.dynamicfeature;
 
 import android.app.Application;
+import android.content.Context;
 
 /** A class to manage data by MDD, like downloading, updating or removing data. */
 public class MddManager {
@@ -33,9 +34,22 @@ public class MddManager {
 
   public void schedulePeriodicBackgroundTasks() {}
 
-  public void getFileGroup(String groupName) {}
+  public void getFileGroups() {}
 
   public void refresh() {}
 
   private MddManager() {}
+
+  /** A notification to show the download progress or completion for image captioning. */
+  public static class MddNotification {
+    public MddNotification(Context context) {}
+
+    public void showDownloading(int totalSizeInByte, int currentSize) {}
+
+    public void showComplete() {}
+
+    public void cancel() {}
+
+    public static void cancel(Context context) {}
+  }
 }

@@ -52,7 +52,7 @@
   <string name="voice_commands_dictate">הכתבה</string>
   <string name="voice_commands_write">כתיבה</string>
   <string name="voice_commands_Spell">איות</string>
-  <string name="voice_commands_talkback_settings">‏הגדרות TalkBack</string>
+  <string name="voice_commands_talkback_settings">‏ההגדרות של TalkBack</string>
   <string name="voice_commands_talkback_setting">‏הגדרת TalkBack</string>
   <string name="voice_commands_screen_search">חיפוש במסך</string>
   <string name="voice_commands_search_on_screen">חיפוש במסך</string>

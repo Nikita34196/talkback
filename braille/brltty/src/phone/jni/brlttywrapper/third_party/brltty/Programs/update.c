@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -1001,26 +1001,38 @@ autospeak (AutospeakMode mode) {
     }
 
   autospeak:
-    if (mode == AUTOSPEAK_SILENT) count = 0;
+    if (scr.quality >= autospeakMinimumScreenContentQuality) {
+      if (mode == AUTOSPEAK_SILENT) count = 0;
 
-    characters += column;
-    int interrupt = 1;
+      characters += column;
+      int interrupt = 1;
 
-    if (indent) {
-      if (speakIndent(characters, count, 0)) {
-        interrupt = 0;
+      if (indent) {
+        if (speakIndent(characters, count, 0)) {
+          interrupt = 0;
+        }
       }
-    }
 
-    if (count && (scr.quality >= autospeakMinimumScreenContentQuality)) {
-      if (!reason) reason = "unknown reason";
+      if ((characters == newCharacters) && (count > 1)) {
+        if (isAllSpaceCharacters(newCharacters, newWidth)) {
+          count = 0;
 
-      logMessage(LOG_CATEGORY(SPEECH_EVENTS),
-        "autospeak: %s: [%d,%d] %d.%d",
-        reason, ses->winx, ses->winy, column, count
-      );
+          if (prefs.autospeakEmptyLine) {
+            sayString(&spk, gettext("blank"), SAY_OPT_MUTE_FIRST);
+          }
+        }
+      }
 
-      speakCharacters(characters, count, 0, interrupt);
+      if (count) {
+        if (!reason) reason = "unknown reason";
+
+        logMessage(LOG_CATEGORY(SPEECH_EVENTS),
+          "autospeak: %s: [%d,%d] %d.%d",
+          reason, ses->winx, ses->winy, column, count
+        );
+
+        speakCharacters(characters, count, 0, interrupt);
+      }
     }
   }
 

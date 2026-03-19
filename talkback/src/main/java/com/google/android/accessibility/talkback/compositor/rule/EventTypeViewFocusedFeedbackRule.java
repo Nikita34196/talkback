@@ -74,8 +74,7 @@ public final class EventTypeViewFocusedFeedbackRule {
 
   private static CharSequence getTtsOutput(
       HandleEventOptions eventOptions, GlobalVariables globalVariables) {
-    if (FormFactorUtils.getInstance().isAndroidTv()
-        || FormFactorUtils.getInstance().isAndroidWear()) {
+    if (FormFactorUtils.isAndroidTv() || FormFactorUtils.isAndroidWear()) {
       // On TV, we will always sync accessibility-focus to input-focus, so it is sufficient to
       // speak on TYPE_VIEW_ACCESSIBILITY_FOCUSED.
       //

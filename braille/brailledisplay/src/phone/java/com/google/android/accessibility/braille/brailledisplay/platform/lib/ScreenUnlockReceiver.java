@@ -19,6 +19,7 @@ package com.google.android.accessibility.braille.brailledisplay.platform.lib;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import com.google.android.accessibility.braille.common.lib.ActionReceiver;
 
 /** A BroadcastReceiver for listening to screen unlock. */
 public class ScreenUnlockReceiver

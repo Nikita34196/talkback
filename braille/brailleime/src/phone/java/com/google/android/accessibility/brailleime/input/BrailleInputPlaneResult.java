@@ -16,10 +16,14 @@
 
 package com.google.android.accessibility.brailleime.input;
 
-import androidx.annotation.IntDef;
+import static com.google.android.accessibility.brailleime.input.MultitouchResult.TYPE_CALIBRATION_HOLD;
+import static com.google.android.accessibility.brailleime.input.MultitouchResult.TYPE_HOLD;
+import static com.google.android.accessibility.brailleime.input.MultitouchResult.TYPE_HOLD_AND_SWIPE;
+import static com.google.android.accessibility.brailleime.input.MultitouchResult.TYPE_INVALID;
+import static com.google.android.accessibility.brailleime.input.MultitouchResult.TYPE_SWIPE;
+import static com.google.android.accessibility.brailleime.input.MultitouchResult.TYPE_TAP;
+
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import javax.annotation.Nullable;
 
 /**
@@ -34,23 +38,7 @@ import javax.annotation.Nullable;
  * </ul>
  */
 class BrailleInputPlaneResult {
-  @IntDef({
-    TYPE_TAP,
-    TYPE_SWIPE,
-    TYPE_CALIBRATION,
-    TYPE_HOLD,
-    TYPE_HOLD_AND_SWIPE,
-  })
-  @Retention(RetentionPolicy.SOURCE)
-  public @interface Type {}
-
-  static final int TYPE_TAP = 0;
-  static final int TYPE_SWIPE = 1;
-  static final int TYPE_CALIBRATION = 2;
-  static final int TYPE_HOLD = 3;
-  static final int TYPE_HOLD_AND_SWIPE = 4;
-
-  @Type int type;
+  @MultitouchResult.Type int type;
   @Nullable BrailleCharacter releasedBrailleCharacter;
   @Nullable BrailleCharacter heldBrailleCharacter;
   @Nullable Swipe swipe;
@@ -68,7 +56,7 @@ class BrailleInputPlaneResult {
 
   static BrailleInputPlaneResult createCalibration(boolean isLeft, int pointersHeldCount) {
     BrailleInputPlaneResult result = new BrailleInputPlaneResult();
-    result.type = TYPE_CALIBRATION;
+    result.type = TYPE_CALIBRATION_HOLD;
     result.pointersHeldCount = pointersHeldCount;
     result.isLeft = isLeft;
     return result;
@@ -94,6 +82,12 @@ class BrailleInputPlaneResult {
     BrailleInputPlaneResult result = new BrailleInputPlaneResult();
     result.type = TYPE_SWIPE;
     result.swipe = swipe;
+    return result;
+  }
+
+  static BrailleInputPlaneResult createInvalidGesture() {
+    BrailleInputPlaneResult result = new BrailleInputPlaneResult();
+    result.type = TYPE_INVALID;
     return result;
   }
 

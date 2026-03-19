@@ -172,7 +172,7 @@ public class AccessibilityFocusMonitor {
   public @Nullable AccessibilityNodeInfoCompat getEditingNodeFromFocusedKeyboard(
       AccessibilityNodeInfoCompat accessibilityFocusNode) {
 
-    if (FormFactorUtils.getInstance().isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       // The editing node in the IME window has higher order than the one in the app window because
       // the IME window might fully cover the app window on WearOS. So, the editing node would be
       // visible in the IME window, rather than the app window.

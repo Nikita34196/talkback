@@ -16,7 +16,6 @@
 
 package com.google.android.accessibility.utils;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
@@ -33,6 +32,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceDialogFragmentCompat;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceGroup;
+import androidx.preference.PreferenceScreen;
 import com.google.android.libraries.accessibility.utils.device.DeviceUtils;
 import java.util.HashSet;
 import java.util.List;
@@ -98,6 +98,14 @@ public final class PreferenceSettingsUtils {
     hidePreferences(context, root, new int[] {prefKeyId});
   }
 
+  /** Sets the root of the preference hierarchy that this fragment is showing. */
+  public static void setPreferenceScreen(
+      PreferenceFragmentCompat preferenceFragment, PreferenceScreen preferenceScreen) {
+    // Set preferences to use device-protected storage.
+    preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
+    preferenceFragment.setPreferenceScreen(preferenceScreen);
+  }
+
   /**
    * Inflates the given XML resource and replaces the current preference hierarchy (if any) with the
    * preference hierarchy rooted at {@code key}.{@link
@@ -106,9 +114,7 @@ public final class PreferenceSettingsUtils {
   public static void setPreferencesFromResource(
       PreferenceFragmentCompat preferenceFragment, @XmlRes int preferencesResId, String key) {
     // Set preferences to use device-protected storage.
-    if (BuildVersionUtils.isAtLeastN()) {
-      preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
-    }
+    preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
     preferenceFragment.setPreferencesFromResource(preferencesResId, key);
   }
 
@@ -119,9 +125,7 @@ public final class PreferenceSettingsUtils {
   public static void addPreferencesFromResource(
       PreferenceFragmentCompat preferenceFragment, @XmlRes int preferencesResId) {
     // Set preferences to use device-protected storage.
-    if (BuildVersionUtils.isAtLeastN()) {
-      preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
-    }
+    preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
     preferenceFragment.addPreferencesFromResource(preferencesResId);
   }
 
@@ -132,9 +136,7 @@ public final class PreferenceSettingsUtils {
   public static void addPreferencesFromResource(
       PreferenceFragment preferenceFragment, @XmlRes int preferencesResId) {
     // Set preferences to use device-protected storage.
-    if (BuildVersionUtils.isAtLeastN()) {
-      preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
-    }
+    preferenceFragment.getPreferenceManager().setStorageDeviceProtected();
     preferenceFragment.addPreferencesFromResource(preferencesResId);
   }
 
@@ -177,9 +179,12 @@ public final class PreferenceSettingsUtils {
       return false;
     }
 
-    PackageManager manager = activity.getPackageManager();
-    // The permission is preferable but not strictly necessary.
-    @SuppressLint("QueryPermissionsNeeded")
+    return canHandleIntent(activity, intent);
+  }
+
+  /** Checks if the intent could be performed by the context. */
+  public static boolean canHandleIntent(Context context, Intent intent) {
+    PackageManager manager = context.getPackageManager();
     List<ResolveInfo> infos = manager.queryIntentActivities(intent, 0);
     return infos != null && !infos.isEmpty();
   }

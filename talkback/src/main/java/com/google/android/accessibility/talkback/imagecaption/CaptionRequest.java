@@ -21,7 +21,6 @@ import androidx.annotation.Nullable;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.utils.AccessibilityNode;
 import com.google.android.accessibility.utils.StringBuilderUtils;
-import com.google.android.accessibility.utils.caption.Result;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import java.time.Duration;
 

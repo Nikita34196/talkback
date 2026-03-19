@@ -184,6 +184,20 @@ public class OcrController {
    */
   @Nullable
   public static String getTextFromBlocks(@Nullable List<TextBlock> textBlocks) {
+    return getTextFromBlocks(textBlocks, 0f);
+  }
+
+  /**
+   * Combine all the text from the textBlocks into one string, concatenating words and lines with
+   * wordSeparators (likely spaces), and TextBlocks with paragraphSeparators (likely newlines).
+   *
+   * @param textBlocks The TextBlocks that contain the resulting text from OCR.
+   * @param threshold The text will be skipped if its confidence level is less than the threshold.
+   * @return A string containing the combined text from all the TextBlocks.
+   */
+  @Nullable
+  public static String getTextFromBlocks(@Nullable List<TextBlock> textBlocks, float threshold) {
+    LogUtils.v(TAG, "getTextFromBlocks=");
     if (textBlocks == null || textBlocks.isEmpty()) {
       return null;
     }
@@ -194,9 +208,18 @@ public class OcrController {
       TextBlock textBlock = textBlocks.get(i);
 
       for (Line line : textBlock.getLines()) {
-        for (Element word : line.getElements()) {
-          text.append(word.getText().trim()).append(WORD_SEPARATOR);
+        StringBuilder logLineText = new StringBuilder();
+        if (line.getConfidence() < threshold) {
+          for (Element word : line.getElements()) {
+            logLineText.append(word.getText().trim()).append(WORD_SEPARATOR);
+          }
+        } else {
+          for (Element word : line.getElements()) {
+            text.append(word.getText().trim()).append(WORD_SEPARATOR);
+            logLineText.append(word.getText().trim()).append(WORD_SEPARATOR);
+          }
         }
+        LogUtils.v(TAG, "(confidence=%f) %s", line.getConfidence(), logLineText);
       }
 
       if (textBlock.getLines().isEmpty() || TextUtils.isEmpty(text)) {

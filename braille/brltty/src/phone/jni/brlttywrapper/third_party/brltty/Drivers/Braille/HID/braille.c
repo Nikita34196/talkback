@@ -84,6 +84,9 @@ static int probeHidDisplay(BrailleDisplay *brl, HidItemsDescriptor *items) {
   //   Stores the number of output cells so that brltty knows how to prepare
   //   output cells.
   brl->textColumns = -1;
+  //   Stores the number of text rows so that brltty knows how to prepare
+  //   output cells.
+  brl->textRows = 1;
   //   The report ID that will be providing Braille Display input and output.
   brl->data->reportInfo.reportId = -1;
 
@@ -158,12 +161,15 @@ static int probeHidDisplay(BrailleDisplay *brl, HidItemsDescriptor *items) {
           inputReportBit += reportSize * reportCount;
           continue;
         }
-        // Fail if we get a usage of unexpected type or size
-        if (reportSize != 1) {
-          logMessage(LOG_ERR, "Unexpected input item input size %u != 1",
-                     reportSize);
-          parsingError = 1;
-          break;
+        // Ignore INPUT for the "Number of Braille Cells" usage.
+        // The display may send this INPUT message to indicate how many Braille
+        // cells we are allowed to write to at the moment, but this driver
+        // does not currently respect that request and always uses all Braille
+        // cells indicated by the OUTPUT report.
+        if (usagePage == HID_UPG_Braille &&
+          usages[0] == HID_USG_BRL_CellCount) {
+          inputReportBit += reportSize * reportCount;
+          continue;
         }
         if ((item.value.u & HID_USG_FLG_VARIABLE) != HID_USG_FLG_VARIABLE) {
           logMessage(LOG_ERR, "Unexpected non-variable input item");
@@ -207,12 +213,19 @@ static int probeHidDisplay(BrailleDisplay *brl, HidItemsDescriptor *items) {
           parsingError = 1;
           break;
         }
-        if (brl->textColumns != -1) {
-          logMessage(LOG_ERR, "Unexpected received multiple BD output reports");
-          parsingError = 1;
-          break;
+        if (brl->textColumns == -1) {
+          brl->textColumns = reportCount;
+        } else {
+          // We have seen an Output report before. Therefore, this is a new row.
+          brl->textRows++;
+          // Sanity check if this new row have the same number of columns.
+          if (brl->textColumns != reportCount) {
+            logMessage(LOG_ERR, "Inconsistent column counts between braille "
+              "rows: %u != %u", brl->textColumns, reportCount);
+            parsingError = 1;
+            break;
+          }
         }
-        brl->textColumns = reportCount;
       }
     }
   }
@@ -233,7 +246,7 @@ static int probeHidDisplay(BrailleDisplay *brl, HidItemsDescriptor *items) {
     logMessage(LOG_DEBUG, "bit=%d report=%i", i,
                brl->data->reportInfo.inputReportUsages[i]);
 
-    // While parsing the descript we built up map inputReportUsages from
+    // While parsing the descriptor we built up map inputReportUsages from
     // bit->usage. However, brltty doesn't use usages to describe key events:
     // brltty uses a key table that was provided by brl_construct. This logic
     // builds up a new map from bit->key where the key values come from the key
@@ -250,17 +263,6 @@ static int probeHidDisplay(BrailleDisplay *brl, HidItemsDescriptor *items) {
     if (brl->data->reportInfo.inputReportUsages[i] == HID_USG_BRL_RouterKey) {
       if (brl->data->reportInfo.inputRoutingFirstBit == -1) {
         brl->data->reportInfo.inputRoutingFirstBit = i;
-      } else if (brl->data->reportInfo.inputReportUsages[i - 1] !=
-                 HID_USG_BRL_RouterKey) {
-        // Expect that all routing key INPUTs are sent as a contiguous group, so
-        // return error if the descriptor describes something like "... ROUTING
-        // DOT1 ROUTING ...".
-        logMessage(LOG_ERR,
-                   "Unexpected non-contiguous group of router keys at "
-                   "%d with previous entry %u and first bit %d",
-                   i, brl->data->reportInfo.inputReportUsages[i - 1],
-                   brl->data->reportInfo.inputRoutingFirstBit);
-        return 0;
       }
     }
   }

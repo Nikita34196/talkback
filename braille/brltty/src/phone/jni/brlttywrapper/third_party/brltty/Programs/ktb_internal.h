@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -94,10 +94,10 @@ typedef struct {
   wchar_t *name;
   wchar_t *title;
 
-  unsigned char isSpecial : 1;
-  unsigned char isDefined : 1;
-  unsigned char isReferenced : 1;
-  unsigned char isIsolated : 1;
+  unsigned char isSpecial:1;
+  unsigned char isDefined:1;
+  unsigned char isReferenced:1;
+  unsigned char isIsolated:1;
 
   struct {
     KeyBinding *table;

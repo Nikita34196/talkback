@@ -55,7 +55,8 @@ public class BrailleLanguagesActivity extends PreferencesActivity {
   }
 
   /** Picks up preferred languages fragment. */
-  public static class BrailleLanguageFragment extends PreferenceFragmentCompat {
+    public static class BrailleLanguageFragment extends PreferenceFragmentCompat {
+
     private PreferenceCategory languagesPreferenceCategory;
 
     @Override

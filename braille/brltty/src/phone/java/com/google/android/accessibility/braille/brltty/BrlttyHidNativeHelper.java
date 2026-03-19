@@ -15,16 +15,16 @@
  */
 package com.google.android.accessibility.braille.brltty;
 
+import android.accessibilityservice.BrailleDisplayController;
 import androidx.annotation.Nullable;
 import android.util.Log;
-import com.google.android.accessibility.braille.common.FakeBrailleDisplayController;
 import com.google.android.apps.common.proguard.UsedByNative;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.util.ArrayDeque;
 
 /** A Helper class helps hid_android.c in brltty access BrailleDisplayController APIs. */
-public class BrlttyHidNativeHelper {
+public final class BrlttyHidNativeHelper {
   private static final String TAG = "HidAndroidHelper";
   private static final Object lock = new Object();
   private static final ArrayDeque<byte[]> inputReports = new ArrayDeque<>();
@@ -35,12 +35,14 @@ public class BrlttyHidNativeHelper {
 
   @SuppressWarnings("NonFinalStaticField")
   @Nullable
-  private static FakeBrailleDisplayController brailleDisplayController;
+  private static BrailleDisplayController brailleDisplayController;
+
+  private BrlttyHidNativeHelper() {}
 
   // Methods used by HidConnection.java
 
   /** Prepares a report descriptor for BRLTTY to interpret the format of incoming reports. */
-  public static void setup(FakeBrailleDisplayController controller, byte[] descriptor) {
+  public static void setup(BrailleDisplayController controller, byte[] descriptor) {
     brailleDisplayController = controller;
     reportDescriptor = descriptor;
   }
@@ -57,6 +59,10 @@ public class BrlttyHidNativeHelper {
 
   // Methods used by hid_android.c with JNI
 
+  /**
+   * Returns report descriptor to BRLTTY. It could be null if braille display is not connected or
+   * the report descriptor is not setup in {@link #setup(BrailleDisplayController, byte[])}
+   */
   @UsedByNative("hid_android.c")
   @Nullable
   public static byte[] getReportDescriptor() {
@@ -75,9 +81,9 @@ public class BrlttyHidNativeHelper {
     }
   }
 
+  /** Reads braille display's input from cache saved in {@link #onInput}. */
   @UsedByNative("hid_android.c")
   @Nullable
-  /** Reads braille display's input from cache saved in {@link #onInput}. */
   public static byte[] readBrailleDisplay() {
     synchronized (lock) {
       if (inputReports.isEmpty()) {

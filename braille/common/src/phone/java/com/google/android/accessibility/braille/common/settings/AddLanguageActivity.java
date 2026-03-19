@@ -53,7 +53,8 @@ public class AddLanguageActivity extends PreferencesActivity {
   }
 
   /** Fragment of AddLanguageActivity. */
-  public static class AddLanguageFragment extends PreferenceFragmentCompat {
+    public static class AddLanguageFragment extends PreferenceFragmentCompat {
+
     private PreferenceCategory localeCategoryPreference;
 
     @Override

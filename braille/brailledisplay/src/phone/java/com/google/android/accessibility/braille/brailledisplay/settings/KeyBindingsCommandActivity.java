@@ -25,22 +25,18 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
-import androidx.annotation.Nullable;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
-import com.google.android.accessibility.braille.brailledisplay.BrailleDisplay;
 import com.google.android.accessibility.braille.brailledisplay.BrailleDisplayLog;
 import com.google.android.accessibility.braille.brailledisplay.R;
+import com.google.android.accessibility.braille.brailledisplay.SupportedCommand;
+import com.google.android.accessibility.braille.brailledisplay.SupportedCommand.Category;
+import com.google.android.accessibility.braille.brailledisplay.SupportedCommand.Subcategory;
 import com.google.android.accessibility.braille.brailledisplay.controller.utils.BrailleKeyBindingUtils;
-import com.google.android.accessibility.braille.brailledisplay.controller.utils.BrailleKeyBindingUtils.SupportedCommand;
-import com.google.android.accessibility.braille.brailledisplay.controller.utils.BrailleKeyBindingUtils.SupportedCommand.Category;
-import com.google.android.accessibility.braille.brailledisplay.controller.utils.BrailleKeyBindingUtils.SupportedCommand.Subcategory;
 import com.google.android.accessibility.braille.brailledisplay.platform.Connectioneer;
-import com.google.android.accessibility.braille.brailledisplay.platform.Connectioneer.AspectConnection;
-import com.google.android.accessibility.braille.brailledisplay.platform.Connectioneer.CreationArguments;
-import com.google.android.accessibility.braille.brailledisplay.platform.connect.device.ConnectableDevice;
+import com.google.android.accessibility.braille.brailledisplay.platform.Connectioneer.AspectDisplayer;
 import com.google.android.accessibility.braille.brltty.BrailleDisplayProperties;
 import com.google.android.accessibility.braille.brltty.BrailleKeyBinding;
 import com.google.android.accessibility.utils.PreferenceSettingsUtils;
@@ -65,7 +61,8 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
   }
 
   /** Fragment that holds the braille elements preference. */
-  public static class KeyBindingsCommandFragment extends PreferenceFragmentCompat {
+    public static class KeyBindingsCommandFragment extends PreferenceFragmentCompat {
+
     private Category supportedCommandCategory;
     private Connectioneer connectioneer;
     private Preference descriptionPreference;
@@ -73,25 +70,19 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
       super.onCreate(savedInstanceState);
-      connectioneer =
-          Connectioneer.getInstance(
-              new CreationArguments(
-                  getContext().getApplicationContext(),
-                  BrailleDisplay.ENCODER_FACTORY.getDeviceNameFilter()));
+      connectioneer = Connectioneer.getInstance(getContext());
     }
 
     @Override
     public void onResume() {
       super.onResume();
-      connectioneer.aspectDisplayProperties.attach(displayPropertyCallback);
-      connectioneer.aspectConnection.attach(connectionCallback);
+      connectioneer.aspectDisplayer.attach(displayerCallback);
     }
 
     @Override
     public void onPause() {
       super.onPause();
-      connectioneer.aspectDisplayProperties.detach(displayPropertyCallback);
-      connectioneer.aspectConnection.detach(connectionCallback);
+      connectioneer.aspectDisplayer.detach(displayerCallback);
     }
 
     @Override
@@ -117,6 +108,7 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
     }
 
     private void refresh(BrailleDisplayProperties props) {
+      // Clear all preference except category description to avoid duplicate preferences.
       for (int i = getPreferenceScreen().getPreferenceCount() - 1; i >= 0; i--) {
         Preference preference = getPreferenceScreen().getPreference(i);
         if (!Objects.equals(preference.getKey(), descriptionPreference.getKey())) {
@@ -124,7 +116,7 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
         }
       }
       for (SupportedCommand supportedCommand :
-          BrailleKeyBindingUtils.getSupportedCommands(getContext())) {
+          SupportedCommand.getAvailableSupportedCommands(getContext())) {
         if (supportedCommand.getCategory().equals(supportedCommandCategory)) {
           String keys = getKeyDescription(supportedCommand, props);
           if (TextUtils.isEmpty(keys)) {
@@ -133,7 +125,10 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
           addPreference(
               getPreferenceScreen(),
               supportedCommand.getSubcategory(),
-              createPreference(supportedCommand.getCommandDescription(getResources()), keys));
+              createPreference(
+                  supportedCommand.getCommandDescription(getResources()),
+                  supportedCommand.getCommand(),
+                  keys));
         }
       }
     }
@@ -176,12 +171,13 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
     }
 
     private Preference createPreference(
-        CharSequence commandDescription, CharSequence keyDescription) {
+        CharSequence commandDescription, int command, CharSequence keyDescription) {
       String title =
           getResources()
               .getString(
                   R.string.bd_commands_description_template, commandDescription, keyDescription);
       Preference preference = new Preference(getContext());
+      preference.setKey(String.valueOf(command));
       // In order to let title color to not change to gray, when the Preference is not
       // selectable.
       preference.setTitle(changeTextColor(title, R.color.settings_primary_text));
@@ -200,44 +196,17 @@ public class KeyBindingsCommandActivity extends PreferencesActivity {
       return spannableString;
     }
 
-    private final Connectioneer.AspectDisplayProperties.Callback displayPropertyCallback =
-        new Connectioneer.AspectDisplayProperties.Callback() {
+    private final AspectDisplayer.Callback displayerCallback =
+        new AspectDisplayer.Callback() {
           @Override
-          public void onDisplayPropertiesArrived(
-              BrailleDisplayProperties brailleDisplayProperties) {
+          public void onDisplayStarted(BrailleDisplayProperties brailleDisplayProperties) {
             refresh(brailleDisplayProperties);
           }
-        };
-
-    private final Connectioneer.AspectConnection.Callback connectionCallback =
-        new AspectConnection.Callback() {
-          @Override
-          public void onScanningChanged() {}
 
           @Override
-          public void onDeviceListCleared() {}
-
-          @Override
-          public void onConnectHidStarted() {}
-
-          @Override
-          public void onConnectRfcommStarted() {}
-
-          @Override
-          public void onConnectableDeviceSeenOrUpdated(ConnectableDevice device) {}
-
-          @Override
-          public void onConnectableDeviceDeleted(ConnectableDevice device) {}
-
-          @Override
-          public void onConnectionStatusChanged(ConnectStatus status, ConnectableDevice device) {
-            if (status != ConnectStatus.CONNECTED) {
-              refresh(null);
-            }
+          public void onDisplayStopped() {
+            refresh(null);
           }
-
-          @Override
-          public void onConnectFailed(boolean manual, @Nullable String deviceName) {}
         };
   }
 }

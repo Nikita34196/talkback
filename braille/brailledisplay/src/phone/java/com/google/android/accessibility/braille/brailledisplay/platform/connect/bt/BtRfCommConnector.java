@@ -19,6 +19,7 @@ package com.google.android.accessibility.braille.brailledisplay.platform.connect
 import android.bluetooth.BluetoothSocket;
 import android.os.Handler;
 import android.os.Message;
+import androidx.annotation.VisibleForTesting;
 import com.google.android.accessibility.braille.brailledisplay.BrailleDisplayLog;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.Connector;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.device.ConnectableBluetoothDevice;
@@ -37,15 +38,13 @@ public class BtRfCommConnector extends Connector {
   private static final int MSG_CONNECT_SUCCESS = 1;
   private static final int MSG_CONNECT_FAILURE = 2;
   private final Handler mainHandler;
-  private Connector.Callback callback;
   private BluetoothSocket connectingSocket;
   private boolean hasFailed;
 
   /** Constructor. Must be called on the main thread. */
   public BtRfCommConnector(ConnectableDevice device, Connector.Callback callback) {
-    super(device);
+    super(device, callback);
     Utils.assertMainThread();
-    this.callback = callback;
     mainHandler = new MainHandler();
   }
 
@@ -62,7 +61,7 @@ public class BtRfCommConnector extends Connector {
               ((ConnectableBluetoothDevice) getDevice()).bluetoothDevice());
     } catch (IOException ioe) {
       BrailleDisplayLog.e(TAG, "createRfcommSocket failed");
-      callback.onConnectFailure(getDevice(), ioe);
+      getConnectorCallback().onConnectFailure(getDevice(), ioe);
       return;
     }
     new ConnectThread().start();
@@ -82,9 +81,15 @@ public class BtRfCommConnector extends Connector {
     }
     try {
       connectingSocket.close();
+      connectingSocket = null;
     } catch (IOException e) {
       BrailleDisplayLog.e(TAG, "socket closed exception.", e);
     }
+  }
+
+  @VisibleForTesting
+  Handler testing_getMainHandler() {
+    return mainHandler;
   }
 
   private class MainHandler extends Handler {
@@ -100,7 +105,7 @@ public class BtRfCommConnector extends Connector {
           connection.shutdown();
         } else {
           BrailleDisplayLog.d(TAG, "invoke onConnectSuccess");
-          callback.onConnectSuccess(connection);
+          getConnectorCallback().onConnectSuccess(connection);
         }
       } else if (msg.what == MSG_CONNECT_FAILURE) {
         if (isShutdown()) {
@@ -110,8 +115,7 @@ public class BtRfCommConnector extends Connector {
         } else {
           BrailleDisplayLog.d(TAG, "invoke onConnectFailure");
           hasFailed = true;
-          callback.onConnectFailure(getDevice(), (Exception) msg.obj);
-          callback = null;
+          getConnectorCallback().onConnectFailure(getDevice(), (Exception) msg.obj);
         }
       }
     }
@@ -156,6 +160,6 @@ public class BtRfCommConnector extends Connector {
   }
 
   private boolean isShutdown() {
-    return callback == null;
+    return connectingSocket == null;
   }
 }

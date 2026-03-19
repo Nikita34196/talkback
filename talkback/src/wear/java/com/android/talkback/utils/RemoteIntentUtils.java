@@ -21,20 +21,27 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.view.View;
+import android.view.ViewGroup.LayoutParams;
 import androidx.annotation.Nullable;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.wear.remote.interactions.RemoteActivityHelper;
 import androidx.wear.widget.ConfirmationOverlay;
 import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.compose.widget.ComposeDialogKt;
+import com.google.android.accessibility.talkback.flags.Flags;
 import com.google.android.accessibility.utils.SettingsUtils;
+import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.Executors;
 
 /** The utility class to open URL on the remote device and show result on the local device. */
 public class RemoteIntentUtils {
+
+  public static final String TAG = "RemoteIntentUtils";
 
   /** An interface invoked when the animation is finished. */
   public interface OnRemoteIntentAnimationFinishedListener {
@@ -77,8 +84,17 @@ public class RemoteIntentUtils {
     if (activity != null) {
       preference.setOnPreferenceClickListener(
           pref -> {
-            RemoteIntentUtils.startRemoteActivityToOpenUriOnPhone(
-                uri, pref.getContext(), activity, listener);
+            boolean isStandaloneOrRestricted = SettingsUtils.isStandaloneOrRestricted(activity);
+            LogUtils.v(TAG, "isStandaloneOrRestricted=%b", isStandaloneOrRestricted);
+            if (isStandaloneOrRestricted) {
+              // Standalone devices cannot receive remote intent so we directly invoke the callback.
+              if (listener != null) {
+                listener.onAnimationFinished(/* success= */ false);
+              }
+            } else {
+              RemoteIntentUtils.startRemoteActivityToOpenUriOnPhone(
+                  uri, pref.getContext(), activity, listener);
+            }
             return true;
           });
     }
@@ -141,16 +157,16 @@ public class RemoteIntentUtils {
     Futures.addCallback(result, callback, context.getMainExecutor());
   }
 
-  /** A {@link FutureCallback} that shows a {@link ConfirmationOverlay} to indicate the result. */
+  /** A {@link FutureCallback} that shows a ConfirmationDialog to indicate the result. */
   private static final class RemoteIntentActionCallback implements FutureCallback<Void> {
 
-    private final Context context;
+    private final WeakReference<Context> contextWeakReference;
     private Activity activity;
     private View rootView;
     private OnRemoteIntentAnimationFinishedListener onAnimationFinishedListener;
 
     public RemoteIntentActionCallback(Context context) {
-      this.context = context;
+      this.contextWeakReference = new WeakReference<>(context.getApplicationContext());
     }
 
     public void setActivity(Activity activity) {
@@ -168,15 +184,29 @@ public class RemoteIntentUtils {
 
     @Override
     public void onSuccess(Void result) {
-      showConfirmationOverlay(RemoteActivityHelper.RESULT_OK);
+      showResultOverlay(RemoteActivityHelper.RESULT_OK);
     }
 
     @Override
     public void onFailure(Throwable t) {
-      showConfirmationOverlay(RemoteActivityHelper.RESULT_FAILED);
+      showResultOverlay(RemoteActivityHelper.RESULT_FAILED);
     }
 
-    private void showConfirmationOverlay(int resultCode) {
+    private void showResultOverlay(int resultCode) {
+      Context context = contextWeakReference.get();
+      if (context == null) {
+        return;
+      }
+
+      Activity activity = this.activity;
+      if (Flags.ENABLE_COMPOSE_CONFIRMATION_DIALOG && activity != null) {
+        showConfirmationDialog(activity, resultCode);
+      } else {
+        showConfirmationOverlay(context, resultCode);
+      }
+    }
+
+    private void showConfirmationOverlay(Context context, int resultCode) {
       ConfirmationOverlay confirmationOverlay = new ConfirmationOverlay();
       if (resultCode == RemoteActivityHelper.RESULT_OK) {
         confirmationOverlay
@@ -204,6 +234,47 @@ public class RemoteIntentUtils {
       } else if (rootView != null) {
         confirmationOverlay.showAbove(rootView);
       }
+    }
+
+    private void showConfirmationDialog(Activity activity, int resultCode) {
+      if (activity == null) {
+        throw new IllegalStateException("Dialog needs an Activity to launch it in a new window.");
+      }
+
+      View confirmationDialog;
+      if (resultCode == RemoteActivityHelper.RESULT_OK) {
+        confirmationDialog =
+            ComposeDialogKt.createOpenOnPhoneConfirmationDialog(
+                activity,
+                /* onDismissRequest= */ () -> {
+                  onAnimationFinishedListener.onAnimationFinished(/* success= */ true);
+                  return null;
+                });
+      } else {
+        confirmationDialog =
+            ComposeDialogKt.createFailureConfirmationDialog(
+                activity,
+                activity.getString(R.string.watch_remote_intent_error_confirmation_curved_text),
+                activity.getString(R.string.watch_remote_intent_error_confirmation_text),
+                /* onDismissRequest= */ () -> {
+                  onAnimationFinishedListener.onAnimationFinished(/* success= */ false);
+                  return null;
+                });
+      }
+
+      addConfirmationDialogView(activity, confirmationDialog);
+    }
+
+    private void addConfirmationDialogView(Activity activity, View confirmationDialog) {
+      if (activity == null) {
+        throw new IllegalStateException("Dialog needs an Activity to launch it in a new window.");
+      }
+
+      activity
+          .getWindow()
+          .addContentView(
+              confirmationDialog,
+              new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     }
   }
 

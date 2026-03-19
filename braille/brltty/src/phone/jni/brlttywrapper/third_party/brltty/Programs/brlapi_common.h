@@ -1,7 +1,7 @@
 /*
  * libbrlapi - A library providing access to braille terminals for applications.
  *
- * Copyright (C) 2002-2023 by
+ * Copyright (C) 2002-2024 by
  *   Samuel Thibault <Samuel.Thibault@ens-lyon.org>
  *   Sébastien Hinderer <Sebastien.Hinderer@ens-lyon.org>
  *
@@ -487,6 +487,7 @@ static const brlapi_packetTypeEntry_t brlapi_packetTypeTable[] = {
   { BRLAPI_PACKET_VERSION, "Version" },
   { BRLAPI_PACKET_AUTH, "Auth" },
   { BRLAPI_PACKET_GETDRIVERNAME, "GetDriverName" },
+  { BRLAPI_PACKET_GETMODELID, "GetModelID" },
   { BRLAPI_PACKET_GETDISPLAYSIZE, "GetDisplaySize" },
   { BRLAPI_PACKET_ENTERTTYMODE, "EnterTtyMode" },
   { BRLAPI_PACKET_SETFOCUS, "SetFocus" },
@@ -502,6 +503,7 @@ static const brlapi_packetTypeEntry_t brlapi_packetTypeTable[] = {
   { BRLAPI_PACKET_RESUMEDRIVER, "ResumeDriver" },
   { BRLAPI_PACKET_PARAM_VALUE, "ParameterValue" },
   { BRLAPI_PACKET_PARAM_REQUEST, "ParameterRequest" },
+  { BRLAPI_PACKET_PARAM_UPDATE, "ParameterUpdate" },
   { BRLAPI_PACKET_SYNCHRONIZE, "Synchronize" },
   { BRLAPI_PACKET_ACK, "Ack" },
   { BRLAPI_PACKET_ERROR, "Error" },
@@ -827,6 +829,15 @@ static const brlapi_param_properties_t brlapi_param_properties[BRLAPI_PARAM_COUN
     .canRead = 1,
     .canWatch = 1,
     .canWrite = 1,
+  },
+
+//Driver-speciic Parameters
+  [BRLAPI_PARAM_DRIVER_PROPERTY_VALUE] = {
+    .type = BRLAPI_PARAM_TYPE_UINT64,
+    .canRead = 1,
+    .canWrite = 1,
+    .canWatch = 1,
+    .hasSubparam = 1,
   },
 };
 

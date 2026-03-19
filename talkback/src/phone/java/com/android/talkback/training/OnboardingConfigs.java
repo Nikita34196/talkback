@@ -18,15 +18,27 @@ package com.google.android.accessibility.talkback.training;
 
 import static com.google.android.accessibility.talkback.trainingcommon.NavigationButtonBar.BUTTON_TYPE_EXIT;
 import static com.google.android.accessibility.talkback.trainingcommon.NavigationButtonBar.DEFAULT_BUTTONS;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.LinkInfo.ADVANCED_SETTING;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.LinkInfo.BRAILLE_DISPLAY;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.LinkInfo.KEYBOARD_SHORTCUT;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.LinkInfo.TEXT_FORMATTING_OPTIONS;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.LinkInfo.TUTORIAL;
 import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_EXIT_BANNER;
-import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_DETAILED_IMAGE_DESCRIPTIONS;
-import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_GOOGLE_DISABILITY_SUPPORT;
-import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_NEW_BRAILLE_SHORTCUTS;
-import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_PUNCTUATION_AND_SYMBOLS;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_KEYBOARD_ENHANCED_KEYMAP;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_KEYBOARD_TUTORIAL;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_SPLIT_TAP_EVERYWHERE;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_TEXT_FORMATTING;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_VOICE_DICTATION_WITHOUT_GOOGLE_PLAY;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageAndContentPredicate.SUPPORT_VOICE_DICTATION_WITH_GOOGLE_PLAY;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_ANNOUNCING_TEXT_FORMATTING;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_KEYBOARD_ENHANCED_KEYMAP;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_KEYBOARD_SMART_BROWSE_MODE;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_KEYBOARD_TUTORIAL;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_NEW_SETTINGS_LAYOUT;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_SHORTCUT_FOR_DICTATION;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_SHORTCUT_FOR_DICTATION_WITHOUT_GOOGLE_PLAY;
+import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_SPLIT_TAP_EVERYWHERE;
 import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_UPDATE_WELCOME;
-import static com.google.android.accessibility.talkback.trainingcommon.TrainingUtils.GUP_SUPPORT_PORTAL_URL;
-import static com.google.android.accessibility.talkback.trainingcommon.TrainingUtils.IMAGE_DESCRIPTION_SUPPORTED_LANGUAGES_URL;
-import static com.google.android.accessibility.talkback.trainingcommon.TrainingUtils.VERBOSITY_OPTION_HELP_CENTER_URL;
 
 import android.accessibilityservice.AccessibilityService;
 import com.google.android.accessibility.talkback.R;
@@ -35,9 +47,8 @@ import com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageA
 import com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId;
 import com.google.android.accessibility.talkback.trainingcommon.TrainingConfig;
 import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
-import java.util.List;
 
+// LINT.IfChange(onboarding_update)
 final class OnboardingConfigs {
 
   private OnboardingConfigs() {}
@@ -86,70 +97,77 @@ final class OnboardingConfigs {
           .captureGesture(
               AccessibilityService.GESTURE_2_FINGER_DOUBLE_TAP_AND_HOLD,
               R.string.new_shortcut_gesture_selection_mode_on_announcement);
-  // For TB 15.0.1
+  // For TB 16.2
   static final PageConfig.Builder updateWelcome =
       PageConfig.builder(PAGE_ID_UPDATE_WELCOME, R.string.welcome_to_updated_talkback_title)
           .addExitBanner(SUPPORT_EXIT_BANNER)
-          .addText(R.string.update_welcome_text_head)
-          .addTextWithBullet(R.string.update_welcome_text_item_one)
-          .addTextWithBullet(R.string.update_welcome_text_item_two, /* subText= */ true)
-          .addTextWithBullet(R.string.update_welcome_text_item_three, /* subText= */ true)
-          .addTextWithBullet(R.string.update_welcome_text_item_four, /* subText= */ true)
-          .addTextWithBullet(R.string.update_welcome_text_item_five, /* subText= */ true)
           .addTextWithTtsSpan(
-              R.string.update_welcome_text_tail, R.string.update_welcome_text_tail_tts);
+              R.string.update_welcome_talkback_16_2, R.string.update_welcome_talkback_16_2_tts);
 
-  static final PageConfig.Builder imageDescription =
-      PageConfig.builder(
-              PAGE_ID_DETAILED_IMAGE_DESCRIPTIONS,
-              R.string.onboarding_detailed_image_descriptions_title)
-          .addText(R.string.onboarding_detailed_image_descriptions_content_1)
-          .addImage(
-              R.drawable.onboarding_sample_image,
-              R.string.onboarding_detailed_image_descriptions_image_content_description)
-          .addTextWithTtsSpan(
-              R.string.onboarding_detailed_image_descriptions_content_2,
-              R.string.onboarding_detailed_image_descriptions_content_2_tts)
-          .addText(R.string.onboarding_detailed_image_descriptions_content_3)
-          .addSubTextWithLink(
-              R.string.onboarding_detailed_image_descriptions_content_4,
-              IMAGE_DESCRIPTION_SUPPORTED_LANGUAGES_URL);
+  static final PageConfig.Builder newSettingsLayout =
+      PageConfig.builder(PAGE_ID_NEW_SETTINGS_LAYOUT, R.string.new_settings_layout_title)
+          .addText(R.string.new_settings_layout_text);
 
-  static final PageConfig.Builder googleDisabilitySupport =
+  static final PageConfig.Builder announcingTextFormatting =
       PageConfig.builder(
-              PAGE_ID_GOOGLE_DISABILITY_SUPPORT,
-              R.string.onboarding_google_disability_support_title)
-          .addTextWithTtsSpan(
-              R.string.onboarding_google_disability_support_content,
-              R.string.onboarding_google_disability_support_content_tts)
-          .addTextWithLink(
-              R.string.onboarding_google_disability_support_content_with_link,
-              GUP_SUPPORT_PORTAL_URL);
+              PAGE_ID_ANNOUNCING_TEXT_FORMATTING, R.string.announcing_text_formatting_title)
+          .setShowingPredicate(SUPPORT_TEXT_FORMATTING)
+          .addText(R.string.announcing_text_formatting_header)
+          .addTextWithBullet(R.string.announcing_text_formatting_option1)
+          .addTextWithBullet(R.string.announcing_text_formatting_option2, /* subText= */ true)
+          .addText(R.string.announcing_text_formatting_middle)
+          .addHtml(R.string.announcing_text_formatiing_sample)
+          .addTextWithSettingsLinks(
+              R.string.announcing_text_formatting_tail,
+              ImmutableList.of(R.string.text_formatting_options_settings_path),
+              ImmutableList.of(R.string.text_formatting_options_settings_path_tts),
+              ImmutableList.of(TEXT_FORMATTING_OPTIONS));
 
-  // TODO: Add URL to learn more string when URL is confirmed.
-  static final PageConfig.Builder punctuationAndSymbols =
-      PageConfig.builder(
-              PAGE_ID_PUNCTUATION_AND_SYMBOLS, R.string.onboarding_punctuation_and_symbols_title)
-          .addTextWithTtsSpan(
-              R.string.onboarding_punctuation_and_symbols_content,
-              R.string.onboarding_punctuation_and_symbols_content_tts)
-          .addTextWithLink(
-              R.string.onboarding_punctuation_and_symbols_content_with_link,
-              VERBOSITY_OPTION_HELP_CENTER_URL);
+  static final PageConfig.Builder shortcutForDictation =
+      PageConfig.builder(PAGE_ID_SHORTCUT_FOR_DICTATION, R.string.shortcut_for_dictation_title)
+          .setShowingPredicate(SUPPORT_VOICE_DICTATION_WITH_GOOGLE_PLAY)
+          .addHtml(R.string.shortcut_for_dictation_content);
 
-  static final PageConfig.Builder newBrailleShortcuts =
+  static final PageConfig.Builder shortcutForDictationWithoutGooglePlay =
       PageConfig.builder(
-              PAGE_ID_NEW_BRAILLE_SHORTCUTS, R.string.new_braille_shortcuts_and_languages_title)
-          .addText(R.string.new_braille_shortcuts_introduction)
-          .addHeading(R.string.new_braille_shortcuts_heading_one)
-          .addTextWithBullet(R.string.new_braille_display_shortcuts_bullet_point_one)
-          .addTextWithBullet(
-              R.string.new_braille_display_shortcuts_bullet_point_two, /* subText= */ true)
-          .addHeading(R.string.new_braille_shortcuts_heading_two)
-          .addTextWithBullet(R.string.new_braille_keyboard_shortcuts_bullet_point_one)
-          .addTextWithBullet(
-              R.string.new_braille_keyboard_shortcuts_bullet_point_two, /* subText= */ true)
-          .addText(R.string.new_braille_shortcuts_end);
+              PAGE_ID_SHORTCUT_FOR_DICTATION_WITHOUT_GOOGLE_PLAY,
+              R.string.shortcut_for_dictation_title)
+          .setShowingPredicate(SUPPORT_VOICE_DICTATION_WITHOUT_GOOGLE_PLAY)
+          .addHtml(R.string.shortcut_for_dictation_content_without_google_play);
+
+  static final PageConfig.Builder splitTapEverywhere =
+      PageConfig.builder(PAGE_ID_SPLIT_TAP_EVERYWHERE, R.string.split_tap_everywhere_title)
+          .setShowingPredicate(SUPPORT_SPLIT_TAP_EVERYWHERE)
+          .addText(R.string.split_tap_everywhere_text);
+
+  static final PageConfig.Builder enhancedKeymap =
+      PageConfig.builder(PAGE_ID_KEYBOARD_ENHANCED_KEYMAP, R.string.keyboard_enhanced_keymap_title)
+          .setShowingPredicate(SUPPORT_KEYBOARD_ENHANCED_KEYMAP)
+          .addTextWithSettingsLinks(
+              R.string.keyboard_enhanced_keymap_text,
+              ImmutableList.of(
+                  R.string.keyboard_shortcuts_link, R.string.braille_display_settings_link),
+              ImmutableList.of(
+                  R.string.keyboard_shortcuts_link_tts, R.string.braille_display_settings_link),
+              ImmutableList.of(KEYBOARD_SHORTCUT, BRAILLE_DISPLAY));
+
+  static final PageConfig.Builder smartBrowseMode =
+      PageConfig.builder(
+              PAGE_ID_KEYBOARD_SMART_BROWSE_MODE, R.string.keyboard_smart_browse_mode_title)
+          .addTextWithSettingsLinks(
+              R.string.keyboard_smart_browse_mode_text,
+              ImmutableList.of(R.string.advanced_settings_link),
+              ImmutableList.of(R.string.advanced_settings_link_tts),
+              ImmutableList.of(ADVANCED_SETTING));
+
+  static final PageConfig.Builder keyboardTutorial =
+      PageConfig.builder(PAGE_ID_KEYBOARD_TUTORIAL, R.string.keyboard_tutorial_title)
+          .setShowingPredicate(SUPPORT_KEYBOARD_TUTORIAL)
+          .addTextWithSettingsLinks(
+              R.string.keyboard_tutorial_text,
+              ImmutableList.of(R.string.tutorial_link),
+              ImmutableList.of(R.string.tutorial_link_tts),
+              ImmutableList.of(TUTORIAL));
 
   // Training
   static TrainingConfig getTalkBackOnBoardingForSettings() {
@@ -170,14 +188,21 @@ final class OnboardingConfigs {
           .build();
 
   private static TrainingConfig.Builder constructOnBoardingConfigBuilder() {
-    List<PageConfig.Builder> pages = new ArrayList<>();
-    pages.add(updateWelcome);
-    pages.add(imageDescription);
-    pages.add(googleDisabilitySupport);
-    pages.add(punctuationAndSymbols);
     return TrainingConfig.builder(R.string.new_feature_in_talkback_title)
-        .setPages(pages)
-        .addPageEndOfSection(newBrailleShortcuts)
+        .setPages(
+            ImmutableList.of(
+                updateWelcome,
+                newSettingsLayout,
+                shortcutForDictation,
+                shortcutForDictationWithoutGooglePlay,
+                announcingTextFormatting,
+                splitTapEverywhere,
+                enhancedKeymap,
+                smartBrowseMode))
+        .addPageEndOfSection(keyboardTutorial)
         .setButtons(DEFAULT_BUTTONS);
   }
 }
+// LINT.ThenChange(
+// //depot/google3/java/com/google/android/accessibility/talkback/res/values/donottranslate.xml:onboarding_update,
+// //depot/google3/java/com/google/android/accessibility/talkback/training/OnboardingInitiator.java:onboarding_update)

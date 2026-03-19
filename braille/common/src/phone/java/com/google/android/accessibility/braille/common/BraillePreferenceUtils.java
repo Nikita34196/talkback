@@ -21,6 +21,7 @@ import androidx.appcompat.app.AlertDialog;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.CheckBox;
+import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
@@ -101,24 +102,38 @@ public class BraillePreferenceUtils {
         });
   }
 
-  /** Creates the tip dialog. */
-  public static AlertDialog createTipAlertDialog(
+  /** Creates dialog with "don't show again". */
+  public static AlertDialog createDontShowAgainDialog(
       Context context,
       String title,
       String message,
       BiConsumer<Context, Boolean> checkboxConsumer) {
+    return createDialogWithCheckbox(
+        context, title, message, context.getString(R.string.dont_show_again), checkboxConsumer);
+  }
+
+  /** Creates dialog with check box. */
+  public static AlertDialog createDialogWithCheckbox(
+      Context context,
+      String title,
+      CharSequence message,
+      String checkboxMessage,
+      BiConsumer<Context, Boolean> checkboxConsumer) {
     AlertDialog.Builder builder = MaterialComponentUtils.alertDialogBuilder(context);
     View view =
-        LayoutInflater.from(context).inflate(R.layout.dialog_dont_show_again_checkbox, null);
-    CheckBox dontShowAgainCheckBox = view.findViewById(R.id.dont_show_again);
-    builder
-        .setTitle(title)
-        .setMessage(message)
-        .setView(view)
-        .setPositiveButton(
-            android.R.string.ok,
-            (dialog, which) ->
-                checkboxConsumer.accept(context, !dontShowAgainCheckBox.isChecked()));
+        LayoutInflater.from(context).inflate(R.layout.braille_common_dialog_with_checkbox, null);
+    CheckBox dontShowAgainCheckBox = view.findViewById(R.id.check_box);
+    dontShowAgainCheckBox.setText(checkboxMessage);
+    TextView messageTextView = view.findViewById(R.id.text_view);
+    messageTextView.setText(message);
+    builder =
+        builder
+            .setTitle(title)
+            .setView(view)
+            .setPositiveButton(
+                android.R.string.ok,
+                (dialog, which) ->
+                    checkboxConsumer.accept(context, dontShowAgainCheckBox.isChecked()));
     return builder.create();
   }
 

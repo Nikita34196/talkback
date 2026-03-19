@@ -29,13 +29,7 @@ public class TrainingUtils {
   private TrainingUtils() {}
 
   public static final String GUP_SUPPORT_PORTAL_URL =
-      "https://support.google.com/accessibility/answer/7641084";
-
-  public static final String VERBOSITY_OPTION_HELP_CENTER_URL =
-      "https://support.google.com/accessibility/android/answer/6283655?ref_topic=10601571&sjid=10534216736552497237-NA#zippy=%2Cchange-verbosity";
-
-  public static final String IMAGE_DESCRIPTION_SUPPORTED_LANGUAGES_URL =
-      "https://support.google.com/accessibility/android/answer/11101402";
+      "https://support.google.com/accessibility?p=talkback_setting";
 
   /** Gets the height of the training navigation bar's height if existed. */
   public static int getTrainingNavBarHeight(ViewGroup root) {

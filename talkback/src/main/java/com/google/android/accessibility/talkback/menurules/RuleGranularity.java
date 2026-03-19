@@ -18,7 +18,10 @@ package com.google.android.accessibility.talkback.menurules;
 
 import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.MENU_TYPE_GRANULARITY;
 import static com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED;
+import static com.google.android.accessibility.utils.input.CursorGranularity.COLUMN;
 import static com.google.android.accessibility.utils.input.CursorGranularity.LINE;
+import static com.google.android.accessibility.utils.input.CursorGranularity.ROW;
+import static com.google.android.accessibility.utils.input.CursorGranularity.ROW_COLUMN;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -36,6 +39,7 @@ import com.google.android.accessibility.talkback.contextmenu.AbstractOnContextMe
 import com.google.android.accessibility.talkback.contextmenu.ContextMenu;
 import com.google.android.accessibility.talkback.contextmenu.ContextMenuItem;
 import com.google.android.accessibility.talkback.contextmenu.ContextMenuItem.DeferredType;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.talkback.selector.SelectorController;
 import com.google.android.accessibility.utils.FeatureSupport;
 import com.google.android.accessibility.utils.Performance.EventId;
@@ -82,22 +86,94 @@ public class RuleGranularity extends NodeMenuRule {
         R.string.pref_show_navigation_menu_links_setting_key,
         R.string.granularity_native_link,
         R.bool.pref_show_navigation_menu_links_default),
-    WEB_HEADINGS(
-        R.string.pref_show_navigation_menu_headings_setting_key,
-        R.string.granularity_web_heading,
-        R.bool.pref_show_navigation_menu_headings_default),
-    WEB_CONTROLS(
-        R.string.pref_show_navigation_menu_controls_setting_key,
-        R.string.granularity_web_control,
-        R.bool.pref_show_navigation_menu_controls_default),
-    WEB_LINKS(
-        R.string.pref_show_navigation_menu_links_setting_key,
-        R.string.granularity_web_link,
-        R.bool.pref_show_navigation_menu_links_default),
+    ROW_COLUMN(
+        R.string.pref_show_navigation_menu_row_column_setting_key,
+        R.string.granularity_row_column,
+        R.bool.pref_show_navigation_menu_row_column_default),
+    ROW(
+        R.string.pref_show_navigation_menu_row_setting_key,
+        R.string.granularity_row,
+        R.bool.pref_show_navigation_menu_row_default),
+    COLUMN(
+        R.string.pref_show_navigation_menu_column_setting_key,
+        R.string.granularity_column,
+        R.bool.pref_show_navigation_menu_column_default),
     WEB_LANDMARKS(
         R.string.pref_show_navigation_menu_landmarks_setting_key,
         R.string.granularity_web_landmark,
         R.bool.pref_show_navigation_menu_landmarks_default),
+    WEB_BUTTONS(
+        R.string.pref_show_navigation_menu_buttons_setting_key,
+        R.string.granularity_web_button,
+        R.bool.pref_show_navigation_menu_buttons_default),
+    WEB_CHECKBOXES(
+        R.string.pref_show_navigation_menu_checkboxes_setting_key,
+        R.string.granularity_web_checkbox,
+        R.bool.pref_show_navigation_menu_checkboxes_default),
+    WEB_EDITFIELDS(
+        R.string.pref_show_navigation_menu_editfields_setting_key,
+        R.string.granularity_web_editfield,
+        R.bool.pref_show_navigation_menu_editfields_default),
+    WEB_FOCUSABLES(
+        R.string.pref_show_navigation_menu_focusables_setting_key,
+        R.string.granularity_web_focusable,
+        R.bool.pref_show_navigation_menu_focusables_default),
+    WEB_H1(
+        R.string.pref_show_navigation_menu_h1_setting_key,
+        R.string.granularity_web_h1,
+        R.bool.pref_show_navigation_menu_h1_default),
+    WEB_H2(
+        R.string.pref_show_navigation_menu_h2_setting_key,
+        R.string.granularity_web_h2,
+        R.bool.pref_show_navigation_menu_h2_default),
+    WEB_H3(
+        R.string.pref_show_navigation_menu_h3_setting_key,
+        R.string.granularity_web_h3,
+        R.bool.pref_show_navigation_menu_h3_default),
+    WEB_H4(
+        R.string.pref_show_navigation_menu_h4_setting_key,
+        R.string.granularity_web_h4,
+        R.bool.pref_show_navigation_menu_h4_default),
+    WEB_H5(
+        R.string.pref_show_navigation_menu_h5_setting_key,
+        R.string.granularity_web_h5,
+        R.bool.pref_show_navigation_menu_h5_default),
+    WEB_H6(
+        R.string.pref_show_navigation_menu_h6_setting_key,
+        R.string.granularity_web_h6,
+        R.bool.pref_show_navigation_menu_h6_default),
+    WEB_GRAPHICS(
+        R.string.pref_show_navigation_menu_graphics_setting_key,
+        R.string.granularity_web_graphic,
+        R.bool.pref_show_navigation_menu_graphics_default),
+    WEB_LISTITEMS(
+        R.string.pref_show_navigation_menu_listitems_setting_key,
+        R.string.granularity_web_listitem,
+        R.bool.pref_show_navigation_menu_listitems_default),
+    WEB_LISTS(
+        R.string.pref_show_navigation_menu_lists_setting_key,
+        R.string.granularity_web_list,
+        R.bool.pref_show_navigation_menu_lists_default),
+    WEB_TABLES(
+        R.string.pref_show_navigation_menu_tables_setting_key,
+        R.string.granularity_web_table,
+        R.bool.pref_show_navigation_menu_tables_default),
+    WEB_COMBOBOXES(
+        R.string.pref_show_navigation_menu_comboboxes_setting_key,
+        R.string.granularity_web_combobox,
+        R.bool.pref_show_navigation_menu_comboboxes_default),
+    WEB_VISITED_LINKS(
+        R.string.pref_show_navigation_menu_visited_links_setting_key,
+        R.string.granularity_web_visited_link,
+        R.bool.pref_show_navigation_menu_visited_links_default),
+    WEB_UNVISITED_LINKS(
+        R.string.pref_show_navigation_menu_unvisited_links_setting_key,
+        R.string.granularity_web_unvisited_link,
+        R.bool.pref_show_navigation_menu_unvisited_links_default),
+    WEB_RADIOS(
+        R.string.pref_show_navigation_menu_radios_setting_key,
+        R.string.granularity_web_radio,
+        R.bool.pref_show_navigation_menu_radios_default),
     WINDOW(
         R.string.pref_show_navigation_menu_window_setting_key,
         R.string.granularity_window,
@@ -159,46 +235,39 @@ public class RuleGranularity extends NodeMenuRule {
   @Override
   public List<ContextMenuItem> getMenuItemsForNode(
       Context context, AccessibilityNodeInfoCompat node, boolean includeAncestors) {
-    final CursorGranularity current = actorState.getDirectionNavigation().getGranularityAt(node);
     final List<ContextMenuItem> items = new ArrayList<>();
     final boolean hasWebContent = WebInterfaceUtils.hasNavigableWebContent(node);
-
-    final GranularityMenuItemClickListener clickListener =
-        new GranularityMenuItemClickListener(context, pipeline, node, analytics);
 
     for (CursorGranularity granularity : CursorGranularity.values()) {
       if (!isShowItemByGranularity(context, granularity, actorState)) {
         continue;
       }
 
-      if (granularity.isWebGranularity() && !hasWebContent) {
+      if (granularity.isWebOnlyGranularity() && !hasWebContent) {
         continue;
       }
 
-      if (granularity.isNativeMacroGranularity() && hasWebContent) {
-        continue;
+      if (granularity.isTableNavigationGranularity()) {
+        if (!actorState.getDirectionNavigation().hasNavigableTableContent()) {
+          continue;
+        }
+        if ((granularity.equals(ROW) || granularity.equals(COLUMN))
+            && !FeatureFlagReader.enableRowColumnTwoGranularities(context)) {
+          continue;
+        }
+        if (granularity.equals(ROW_COLUMN)
+            && !FeatureFlagReader.enableRowAndColumnOneGranularity(context)) {
+          continue;
+        }
       }
 
-      ContextMenuItem item =
-          ContextMenu.createMenuItem(
-              context,
-              Menu.NONE,
-              granularity.resourceId,
-              Menu.NONE,
-              context.getString(granularity.resourceId));
-      item.setOnMenuItemClickListener(clickListener);
-      item.setCheckable(true);
-      item.setChecked(granularity.equals(current));
-      // Skip window and focued event for granularity options, REFERTO.
-      item.setSkipRefocusEvents(true);
-      item.setSkipWindowEvents(true);
-
-      // Items are added in "natural" order, e.g. object first.
-      items.add(item);
-    }
-
-    for (ContextMenuItem item : items) {
-      item.setDeferredType(DeferredType.WINDOWS_STABLE);
+      ContextMenuItem item = createMenuItem(context, node, granularity);
+      // Items are added in "natural" order but put table navigation items at the top.
+      if (granularity.isTableNavigationGranularity()) {
+        items.add(0, item);
+      } else {
+        items.add(item);
+      }
     }
 
     return items;
@@ -207,6 +276,28 @@ public class RuleGranularity extends NodeMenuRule {
   @Override
   public CharSequence getUserFriendlyMenuName(Context context) {
     return context.getString(R.string.title_granularity);
+  }
+
+  private ContextMenuItem createMenuItem(
+      Context context, AccessibilityNodeInfoCompat node, CursorGranularity granularity) {
+    final CursorGranularity current = actorState.getDirectionNavigation().getGranularityAt(node);
+    final GranularityMenuItemClickListener clickListener =
+        new GranularityMenuItemClickListener(context, pipeline, node, analytics);
+    ContextMenuItem item =
+        ContextMenu.createMenuItem(
+            context,
+            Menu.NONE,
+            granularity.resourceId,
+            Menu.NONE,
+            context.getString(granularity.resourceId));
+    item.setOnMenuItemClickListener(clickListener);
+    item.setCheckable(true);
+    item.setChecked(granularity.equals(current));
+    // Skip window and focued event for granularity options, REFERTO.
+    item.setSkipRefocusEvents(true);
+    item.setSkipWindowEvents(true);
+    item.setDeferredType(DeferredType.WINDOWS_STABLE);
+    return item;
   }
 
   /** Listener may be shared by multi-contextItems. */

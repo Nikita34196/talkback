@@ -16,7 +16,7 @@
 
 package com.google.android.accessibility.talkback.imagecaption;
 
-import static com.google.android.accessibility.utils.caption.ImageCaptionUtils.CaptionType.OCR;
+import static com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType.OCR;
 
 import android.accessibilityservice.AccessibilityService;
 import android.graphics.Bitmap;
@@ -25,7 +25,6 @@ import androidx.annotation.NonNull;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.utils.Filter;
 import com.google.android.accessibility.utils.StringBuilderUtils;
-import com.google.android.accessibility.utils.caption.Result;
 import com.google.android.accessibility.utils.ocr.OcrController;
 import com.google.android.accessibility.utils.ocr.OcrController.OcrListener;
 import com.google.android.accessibility.utils.ocr.OcrInfo;
@@ -40,6 +39,7 @@ public class CharacterCaptionRequest extends CaptionRequest implements OcrListen
 
   private final OcrController ocrController;
   private final Bitmap screenCapture;
+  private final float threshold = 0.3f;
 
   /** This object takes ownership of node, caller should not recycle. */
   public CharacterCaptionRequest(
@@ -83,7 +83,7 @@ public class CharacterCaptionRequest extends CaptionRequest implements OcrListen
 
     List<CharSequence> texts = new ArrayList<>();
     for (OcrInfo ocrResult : ocrResults) {
-      String text = OcrController.getTextFromBlocks(ocrResult.getTextBlocks());
+      String text = OcrController.getTextFromBlocks(ocrResult.getTextBlocks(), threshold);
       if (TextUtils.isEmpty(text)) {
         continue;
       }

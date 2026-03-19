@@ -16,6 +16,11 @@
 
 package com.google.android.accessibility.talkback.logging;
 
+import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED;
+import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED;
+import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED;
+import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
@@ -29,6 +34,18 @@ import java.util.concurrent.Executor;
 
 /** Logs the event-based latency via {@link PrimesController}. */
 public class EventLatencyLogger implements LatencyTracker, FailoverTtsListener {
+
+  static final boolean LATENCY_DEBUG = true;
+
+  /**
+   * Bitmask representing the set of view events for which we want to log additional
+   * accessibility-related information.
+   */
+  public static final int EVENTS_TO_LOG_ATTRIBUTES =
+      TYPE_VIEW_ACCESSIBILITY_FOCUSED
+          | TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY
+          | TYPE_VIEW_TEXT_SELECTION_CHANGED
+          | TYPE_VIEW_TEXT_CHANGED;
 
   private final Executor executor;
 

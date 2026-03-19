@@ -149,10 +149,8 @@ public class SubtreeChangeEventInterpreter
    * extended, we don't change the delay time while receiving other events types.
    */
   private void extendSubtreeChangedDelayMsIfNeeded(AccessibilityEvent event) {
-    // TODO: Clean the ScrollActionRecord after we successfully handle it.
-    //  After it is fixed, we will extend subtreeChangedDelayMs only when the ScrollActionRecord
-    //  is not null.
     if (TalkbackFeatureSupport.supportMultipleAutoScroll()
+        && scrollActorState.get() != null
         && (event.getEventType() & AccessibilityEvent.TYPE_VIEW_SCROLLED) != 0) {
       subtreeChangedDelayMs = LONG_SUBTREE_CHANGED_DELAY_MS;
     }
@@ -197,7 +195,7 @@ public class SubtreeChangeEventInterpreter
         }
 
         EventId eventId = EVENT_ID_UNTRACKED;
-        if (msg.obj != null && msg.obj instanceof EventId) {
+        if (msg.obj instanceof EventId) {
           eventId = (EventId) msg.obj;
         }
         parent.resetSubtreeChangedDelayMs();
@@ -210,12 +208,7 @@ public class SubtreeChangeEventInterpreter
     }
 
     private boolean shouldKeepDelayMessage(ScrollActionRecord scrollActionRecord) {
-      // TODO: Clean the ScrollActionRecord after we successfully handle it.
-      //  After it is fixed, this logic will be much more meaningful because scrollActionRecord will
-      //  be not null only when auto-scrolling is in progress. That's, we only keep delaying message
-      //  while auto-scrolling.
-      return TalkbackFeatureSupport.supportMultipleAutoScroll()
-          && scrollActionRecord != null
+      return scrollActionRecord != null
           && SystemClock.uptimeMillis() - scrollActionRecord.autoScrolledTime
               < ScrollTimeout.SCROLL_TIMEOUT_LONG.getTimeoutMillis();
     }

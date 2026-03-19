@@ -36,6 +36,7 @@ import android.util.Log;
 import android.view.InputDevice;
 import androidx.annotation.ChecksSdkIntAtLeast;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import com.google.android.accessibility.utils.AccessibilityServiceCompatUtils.Constants;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 
@@ -47,6 +48,9 @@ public final class FeatureSupport {
   @Nullable private static Boolean brailleDisplaySettingsActivityPresent = null;
   @Nullable private static Boolean brailleKeyboardSettingsActivityPresent = null;
   @Nullable private static Boolean isWatch = null;
+
+  private static final int SDK_INT_MULTIPLIER = 100000; // Copied from android.os.Build.java
+  public static final int BAKLAVA_1 = 36 * SDK_INT_MULTIPLIER + 1;
 
   // Enforce noninstantiability with a private constructor.
   private FeatureSupport() {}
@@ -79,10 +83,6 @@ public final class FeatureSupport {
 
   public static boolean isPhoneOrTablet(Context context) {
     return (!isWatch(context) && !isTv(context));
-  }
-
-  public static boolean useSpeakPasswordsServicePref() {
-    return BuildVersionUtils.isAtLeastO();
   }
 
   /** Returns {@code true} for devices which have separate audio a11y stream. */
@@ -195,6 +195,14 @@ public final class FeatureSupport {
    */
   public static boolean supportAnnounceMagnificationChanged() {
     return Build.VERSION.SDK_INT != VERSION_CODES.S && Build.VERSION.SDK_INT != VERSION_CODES.S_V2;
+  }
+
+  /**
+   * Returns {@code true} if platform supports magnification activated state in magnification
+   * config.
+   */
+  public static boolean supportMagnificationConfigActivateState() {
+    return BuildVersionUtils.isAtLeastU();
   }
 
   /**
@@ -462,6 +470,7 @@ public final class FeatureSupport {
   }
 
   /** Returns {@code true} if the device supports gesture detection in the service side. */
+  @ChecksSdkIntAtLeast(api = 33)
   public static boolean supportGestureDetection() {
     return BuildVersionUtils.isAtLeastT();
   }
@@ -563,5 +572,36 @@ public final class FeatureSupport {
   /** Returns {@code true} if this Android platform supports 3fps for take-screenshot. */
   public static boolean supportTakeScreenshot3fps() {
     return BuildVersionUtils.isAtLeastS();
+  }
+
+  /** Returns {@code true} if this Android platform supports WindowMetrics. */
+  public static boolean supportWindowMetrics() {
+    return BuildVersionUtils.isAtLeastR();
+  }
+
+  /** Returns {@code true} if this Android platform supports Split Tap everywhere. */
+  @ChecksSdkIntAtLeast(api = 36)
+  public static boolean supportSplitTapEverywhere() {
+    return Build.VERSION.SDK_INT >= 36 && Build.VERSION.SDK_INT_FULL >= BAKLAVA_1;
+  }
+
+  /** Returns {@code true} if this Android platform supports CONTENT_CHANGE_TYPE_EXPANDED Event. */
+  @ChecksSdkIntAtLeast(api = 36)
+  public static boolean supportExpandedAccessibilityEvent() {
+    return Build.VERSION.SDK_INT >= 36;
+  }
+
+  /** Returns {@code true} if this Android platform supports CONTENT_CHANGE_TYPE_CHECKED Event. */
+  @ChecksSdkIntAtLeast(api = 36)
+  public static boolean supportCheckedAccessibilityEvent() {
+    return Build.VERSION.SDK_INT >= 36;
+  }
+
+  /** Resets the cached static state for testing purposes. */
+  @VisibleForTesting
+  public static void testing_reset() {
+    brailleDisplaySettingsActivityPresent = null;
+    brailleKeyboardSettingsActivityPresent = null;
+    isWatch = null;
   }
 }

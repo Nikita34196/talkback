@@ -25,10 +25,10 @@ import android.util.Pair;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.device.ConnectableDevice;
 import com.google.android.accessibility.braille.brailledisplay.platform.lib.SharedPreferencesStringList;
 import com.google.android.accessibility.utils.SharedPreferencesUtils;
-import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /** Handles the persistence of Braille Display related data, often user preferences. */
@@ -52,7 +52,11 @@ public final class PersistentStorage {
     getSharedPrefs(context).unregisterOnSharedPreferenceChangeListener(changeListener);
   }
 
-  public static void addRememberedDevice(Context context, Pair<String, String> deviceInfo) {
+  /**
+   * Adds or updates remembered devices that match the address. The newly added or updated device
+   * will be saved at the front of the list.
+   */
+  public static void addOrUpdateRememberedDevice(Context context, Pair<String, String> deviceInfo) {
     ImmutableSet<Pair<String, String>> nameAddressSet =
         getRememberedDevices(context).stream()
             .filter(pair -> pair.second.equals(deviceInfo.second))
@@ -60,20 +64,9 @@ public final class PersistentStorage {
 
     if (!nameAddressSet.isEmpty()) {
       // Remove duplicate devices.
-      if (nameAddressSet.size() > 1) {
-        int index = 0;
-        for (Pair<String, String> pair : nameAddressSet) {
-          if (index == 0) {
-            // Keep only one.
-            index++;
-            continue;
-          }
-          deleteRememberedDevice(context, pair);
-        }
+      for (Pair<String, String> pair : nameAddressSet) {
+        deleteRememberedDevice(context, pair);
       }
-
-      // Don't save repeated device.
-      return;
     }
     String deviceInfoString =
         concatenateWithDelimiter(DELIMITER, deviceInfo.first, deviceInfo.second);
@@ -99,6 +92,18 @@ public final class PersistentStorage {
         getSharedPrefs(context), REMEMBERED_DEVICES_WITH_ADDRESSES, deviceInfoString);
   }
 
+  private static void replaceRememberedDevice(
+      Context context, Pair<String, String> oldePair, Pair<String, String> newPair) {
+    String oldDeviceInfoString =
+        concatenateWithDelimiter(DELIMITER, oldePair.first, oldePair.second);
+    String newDeviceInfoString = concatenateWithDelimiter(DELIMITER, newPair.first, newPair.second);
+    SharedPreferencesStringList.replace(
+        getSharedPrefs(context),
+        REMEMBERED_DEVICES_WITH_ADDRESSES,
+        oldDeviceInfoString,
+        newDeviceInfoString);
+  }
+
   /** Syncs remembered device with saved device in Bluetooth settings */
   public static void syncRememberedDevice(Context context, Set<ConnectableDevice> bondedDevices) {
     List<Pair<String, String>> rememberedDeviceInfos = getRememberedDevices(context);
@@ -111,9 +116,8 @@ public final class PersistentStorage {
         deleteRememberedDevice(context, pair);
       } else {
         ConnectableDevice device = filteredBondedDevice.stream().findFirst().get();
-        if (!Objects.equal(device.name(), pair.first)) {
-          deleteRememberedDevice(context, pair);
-          addRememberedDevice(context, new Pair<>(device.name(), device.address()));
+        if (!Objects.equals(device.name(), pair.first)) {
+          replaceRememberedDevice(context, pair, new Pair<>(device.name(), device.address()));
         }
       }
     }

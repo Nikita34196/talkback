@@ -131,34 +131,24 @@ public final class EventTypeNotificationStateChangedFeedbackRule {
     if (notification == null || notification.category == null) {
       return "";
     }
-    switch (notification.category) {
-      case Notification.CATEGORY_CALL:
-        return context.getString(R.string.notification_category_call);
-      case Notification.CATEGORY_MESSAGE:
-        return context.getString(R.string.notification_category_msg);
-      case Notification.CATEGORY_EMAIL:
-        return context.getString(R.string.notification_category_email);
-      case Notification.CATEGORY_EVENT:
-        return context.getString(R.string.notification_category_event);
-      case Notification.CATEGORY_PROMO:
-        return context.getString(R.string.notification_category_promo);
-      case Notification.CATEGORY_ALARM:
-        return context.getString(R.string.notification_category_alarm);
-      case Notification.CATEGORY_PROGRESS:
-        return context.getString(R.string.notification_category_progress);
-      case Notification.CATEGORY_SOCIAL:
-        return context.getString(R.string.notification_category_social);
-      case Notification.CATEGORY_ERROR:
-        return context.getString(R.string.notification_category_err);
-      case Notification.CATEGORY_TRANSPORT:
-        return context.getString(R.string.notification_category_transport);
-      case Notification.CATEGORY_SYSTEM:
-        return context.getString(R.string.notification_category_sys);
-      case Notification.CATEGORY_SERVICE:
-        return context.getString(R.string.notification_category_service);
-      default:
-        return "";
-    }
+    return switch (notification.category) {
+      case Notification.CATEGORY_CALL -> context.getString(R.string.notification_category_call);
+      case Notification.CATEGORY_MESSAGE -> context.getString(R.string.notification_category_msg);
+      case Notification.CATEGORY_EMAIL -> context.getString(R.string.notification_category_email);
+      case Notification.CATEGORY_EVENT -> context.getString(R.string.notification_category_event);
+      case Notification.CATEGORY_PROMO -> context.getString(R.string.notification_category_promo);
+      case Notification.CATEGORY_ALARM -> context.getString(R.string.notification_category_alarm);
+      case Notification.CATEGORY_PROGRESS ->
+          context.getString(R.string.notification_category_progress);
+      case Notification.CATEGORY_SOCIAL -> context.getString(R.string.notification_category_social);
+      case Notification.CATEGORY_ERROR -> context.getString(R.string.notification_category_err);
+      case Notification.CATEGORY_TRANSPORT ->
+          context.getString(R.string.notification_category_transport);
+      case Notification.CATEGORY_SYSTEM -> context.getString(R.string.notification_category_sys);
+      case Notification.CATEGORY_SERVICE ->
+          context.getString(R.string.notification_category_service);
+      default -> "";
+    };
   }
 
   /** Returns the notification details state text. */

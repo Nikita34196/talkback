@@ -45,8 +45,12 @@ class SecondFingerMultiTap extends GestureMatcher {
   long lastUpTime;
 
   SecondFingerMultiTap(
-      Context context, int taps, int gesture, GestureMatcher.StateChangeListener listener) {
-    super(gesture, new Handler(context.getMainLooper()), listener);
+      Context context,
+      int taps,
+      int gesture,
+      GestureMatcher.StateChangeListener listener,
+      GestureMatcher.AnalyticsEventLogger logger) {
+    super(gesture, new Handler(context.getMainLooper()), listener, logger);
     targetTaps = taps;
     doubleTapSlop = ViewConfiguration.get(context).getScaledDoubleTapSlop();
 
@@ -126,18 +130,17 @@ class SecondFingerMultiTap extends GestureMatcher {
   @Override
   protected void onMove(EventId eventId, MotionEvent event) {
     switch (event.getPointerCount()) {
-      case 1:
+      case 1 -> {
         // We don't need to track anything about one-finger movements.
-        break;
-      case 2:
+      }
+      case 2 -> {
         if (!isSecondFingerInsideSlop(event, touchSlop)) {
           cancelGesture(event);
         }
-        break;
-      default:
-        // More than two fingers means we stop tracking.
-        cancelGesture(event);
-        break;
+      }
+      default ->
+          // More than two fingers means we stop tracking.
+          cancelGesture(event);
     }
   }
 
@@ -149,14 +152,11 @@ class SecondFingerMultiTap extends GestureMatcher {
 
   @Override
   public String getGestureName() {
-    switch (targetTaps) {
-      case 2:
-        return "Second Finger Double Tap";
-      case 3:
-        return "Second Finger Triple Tap";
-      default:
-        return "Second Finger " + Integer.toString(targetTaps) + " Taps";
-    }
+    return switch (targetTaps) {
+      case 2 -> "Second Finger Double Tap";
+      case 3 -> "Second Finger Triple Tap";
+      default -> "Second Finger " + Integer.toString(targetTaps) + " Taps";
+    };
   }
 
   private boolean isSecondFingerInsideSlop(MotionEvent event, int slop) {

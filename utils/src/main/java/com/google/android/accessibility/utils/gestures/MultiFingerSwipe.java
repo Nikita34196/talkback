@@ -21,11 +21,13 @@ import static android.view.MotionEvent.INVALID_POINTER_ID;
 
 import android.content.Context;
 import android.graphics.PointF;
+import android.os.Build;
 import android.os.Handler;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
+import androidx.annotation.RequiresApi;
 import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.R;
 import java.util.ArrayList;
@@ -37,6 +39,7 @@ import java.util.List;
  * gesture. A swipe is specified as a series of one or more directions e.g. left, left and up, etc.
  * At this time swipes with more than two directions are not supported.
  */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class MultiFingerSwipe extends GestureMatcher {
 
   // Direction constants.
@@ -65,20 +68,25 @@ class MultiFingerSwipe extends GestureMatcher {
   // We sample based on a minimum distance between points, primarily to improve accuracy by
   // reducing noisy minor changes in direction.
   private static final float MIN_CM_BETWEEN_SAMPLES = 0.25f;
-  private final float minPixelsBetweenSamplesX;
-  private final float minPixelsBetweenSamplesY;
-  // The minmimum distance the finger must travel before we evaluate the initial direction of the
+  private float minPixelsBetweenSamplesX;
+  private float minPixelsBetweenSamplesY;
+  // The minimum distance the finger must travel before we evaluate the initial direction of the
   // swipe.
   // Anything less is still considered a touch.
   private int touchSlop;
+  private int tapTimeout;
+  // This is used to record the time of onDown/onPointerDown, so that we can check whether the all
+  // fingersʼ tap comply the TapTimeout spec.
+  private long lastDownTime;
 
   MultiFingerSwipe(
       Context context,
       int fingerCount,
       int direction,
       int gesture,
-      GestureMatcher.StateChangeListener listener) {
-    super(gesture, new Handler(context.getMainLooper()), listener);
+      GestureMatcher.StateChangeListener listener,
+      GestureMatcher.AnalyticsEventLogger logger) {
+    super(gesture, new Handler(context.getMainLooper()), listener, logger);
     targetFingerCount = fingerCount;
     pointerIds = new int[targetFingerCount];
     base = new PointF[targetFingerCount];
@@ -88,16 +96,26 @@ class MultiFingerSwipe extends GestureMatcher {
       strokeBuffers.add(new ArrayList<PointF>());
     }
     targetDirection = direction;
+    initializeViewConfigurationParameters(context);
+    clear();
+  }
+
+  @Override
+  public void onConfigurationChanged(Context context) {
+    initializeViewConfigurationParameters(context);
+  }
+
+  private void initializeViewConfigurationParameters(Context context) {
     DisplayMetrics displayMetrics = context.getResources().getDisplayMetrics();
     // Calculate gesture sampling interval.
     final float pixelsPerCmX = displayMetrics.xdpi / GestureUtils.CM_PER_INCH;
     final float pixelsPerCmY = displayMetrics.ydpi / GestureUtils.CM_PER_INCH;
     minPixelsBetweenSamplesX = MIN_CM_BETWEEN_SAMPLES * pixelsPerCmX;
     minPixelsBetweenSamplesY = MIN_CM_BETWEEN_SAMPLES * pixelsPerCmY;
+    tapTimeout = targetFingerCount * ViewConfiguration.getTapTimeout();
     touchSlop =
         ViewConfiguration.get(context).getScaledTouchSlop()
             * context.getResources().getInteger(R.integer.config_slop_default_multiplier);
-    clear();
   }
 
   @Override
@@ -118,6 +136,7 @@ class MultiFingerSwipe extends GestureMatcher {
       previousGesturePoint[i].y = Float.NaN;
       strokeBuffers.get(i).clear();
     }
+    lastDownTime = Long.MAX_VALUE;
     super.clear();
   }
 
@@ -141,6 +160,7 @@ class MultiFingerSwipe extends GestureMatcher {
       cancelGesture(event);
       return;
     }
+    lastDownTime = event.getEventTime();
     pointerIds[pointerIndex] = pointerId;
     if (Float.isNaN(base[pointerIndex].x) && Float.isNaN(base[pointerIndex].y)) {
       final float x = event.getX(actionIndex);
@@ -166,6 +186,12 @@ class MultiFingerSwipe extends GestureMatcher {
       cancelGesture(event);
       return;
     }
+    long timeDelta = event.getEventTime() - lastDownTime;
+    if (timeDelta > tapTimeout) {
+      cancelGesture(event);
+      return;
+    }
+    lastDownTime = event.getEventTime();
     currentFingerCount += 1;
     if (currentFingerCount != event.getPointerCount()) {
       cancelGesture(event);
@@ -312,16 +338,17 @@ class MultiFingerSwipe extends GestureMatcher {
   @Override
   protected void onUp(EventId eventId, MotionEvent event) {
     switch (getState()) {
-      case STATE_GESTURE_STARTED:
-        break;
-      case STATE_CLEAR:
+      case STATE_GESTURE_STARTED -> {}
+      case STATE_CLEAR -> {
         // For Swipe gestures, this is the very last motion event. When any of the swipe gesture
         // detectors matches, the others will enter the clear state. We should not Cancel the
         // detector again for the Up event, or it cannot detect new gesture immediately.
         return;
-      default:
+      }
+      default -> {
         cancelGesture(event);
         return;
+      }
     }
     currentFingerCount = 0;
     final int actionIndex = event.getActionIndex();
@@ -414,20 +441,14 @@ class MultiFingerSwipe extends GestureMatcher {
   }
 
   public static String directionToString(int direction) {
-    switch (direction) {
-      case LEFT:
-        return "left";
-      case RIGHT:
-        return "right";
-      case UP:
-        return "up";
-      case DOWN:
-        return "down";
-      case UNCERTAIN:
-        return "still";
-      default:
-        return "Unknown Direction";
-    }
+    return switch (direction) {
+      case LEFT -> "left";
+      case RIGHT -> "right";
+      case UP -> "up";
+      case DOWN -> "down";
+      case UNCERTAIN -> "still";
+      default -> "Unknown Direction";
+    };
   }
 
   @Override

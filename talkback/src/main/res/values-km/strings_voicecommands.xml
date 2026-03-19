@@ -42,7 +42,7 @@
   <string name="voice_commands_deselect">បោះបង់​ការជ្រើសរើស</string>
   <string name="voice_commands_label">ស្លាក</string>
   <string name="voice_commands_cannot_label_feedback">មិនអាច​ដាក់ស្លាក​បានទេ</string>
-  <string name="voice_commands_assistant">ជំនួយការ</string>
+  <string name="voice_commands_assistant">Google Assistant</string>
   <string name="voice_commands_first">ដំបូង</string>
   <string name="voice_commands_top">ខាងលើ</string>
   <string name="voice_commands_last">ចុងក្រោយ</string>

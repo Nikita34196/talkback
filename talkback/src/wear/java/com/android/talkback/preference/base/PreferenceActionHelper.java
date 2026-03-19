@@ -16,15 +16,15 @@
 
 package com.google.android.accessibility.talkback.preference.base;
 
+import android.app.Activity;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
-import android.view.View;
 import androidx.annotation.StringRes;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.talkback.utils.RemoteIntentUtils;
 import com.google.android.accessibility.talkback.utils.RemoteIntentUtils.OnRemoteIntentAnimationFinishedListener;
+import java.lang.ref.WeakReference;
 
 // TODO
 /** A form factor helper to address preference events in Wear devices . */
@@ -41,7 +41,12 @@ public final class PreferenceActionHelper {
         R.string.tos_url,
         R.string.title_pref_show_tos,
         R.string.scan_the_qr_code,
-        R.string.alternate_tos);
+        R.string.alternate_tos),
+    WEB_PAGE_HELP(
+        R.string.help_url,
+        R.string.title_pref_help,
+        R.string.scan_the_qr_code,
+        R.string.alternate_help);
 
     @StringRes final int urlRes;
     // Compared with other form factors, the following fields are specific to Wear.
@@ -62,47 +67,38 @@ public final class PreferenceActionHelper {
    * for the URL in the remote device. However, if we cannot reach out to the remote device, we will
    * show a QR code for this URL in the local device.
    *
-   * @param fragment PreferenceFragmentCompat to get context
+   * @param preferenceFragment PreferenceFragmentCompat to get context
    * @param preference Preference to send Intent
    * @param webPage WebPage which is shown for the preference
    */
   public static void assignWebIntentToPreference(
-      PreferenceFragmentCompat fragment, Preference preference, WebPage webPage) {
-    String url = fragment.getString(webPage.urlRes);
+      PreferenceFragmentCompat preferenceFragment, Preference preference, WebPage webPage) {
+    String url = preferenceFragment.getString(webPage.urlRes);
+
+    WeakReference<Fragment> fragmentWeakReference = new WeakReference<>(preferenceFragment);
+
     RemoteIntentUtils.assignWebIntentToPreference(
-        fragment,
+        preferenceFragment,
         preference,
         url,
         (OnRemoteIntentAnimationFinishedListener)
             success -> {
               if (!success) {
-
-                String title = fragment.getString(webPage.titleRes);
-
-                FragmentManager fragmentManager = fragment.getParentFragmentManager();
-                Fragment oldFragment = fragmentManager.findFragmentByTag(title);
-                if (oldFragment != null) {
-                  // The fragment is existed so we skip this time. This issue could be derived from
-                  // quickly double tapping on the preference.
+                Fragment fragment = fragmentWeakReference.get();
+                if (fragment == null) {
+                  return;
+                }
+                Activity activity = fragment.getActivity();
+                if (activity == null) {
                   return;
                 }
 
-                WearQRCodeFragment wearQrCodeFragment =
-                    WearQRCodeFragment.createWearQrCodeFragment(
-                        url,
-                        title,
-                        fragment.getString(webPage.callToActionRes),
-                        fragment.getString(webPage.alternateRes));
-                wearQrCodeFragment.setTargetFragment(fragment, 0);
-                fragmentManager
-                    .beginTransaction()
-                    .setReorderingAllowed(true)
-                    .add(
-                        ((View) fragment.requireView().getParent()).getId(),
-                        wearQrCodeFragment,
-                        title)
-                    .addToBackStack(null)
-                    .commit();
+                WearQrCodeActivity.startWearQrCodeActivity(
+                    activity,
+                    url,
+                    fragment.getString(webPage.titleRes),
+                    fragment.getString(webPage.callToActionRes),
+                    fragment.getString(webPage.alternateRes));
               }
             });
   }

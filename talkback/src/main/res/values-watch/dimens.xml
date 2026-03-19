@@ -39,9 +39,9 @@
     <dimen name="training_container_padding_vertical">20dp</dimen>
     <dimen name="training_padding_start">10dp</dimen>
     <dimen name="training_padding_end">10dp</dimen>
-    <dimen name="training_padding_top">12dp</dimen>
+    <dimen name="training_padding_top">42dp</dimen>
     <dimen name="training_padding_bottom">12dp</dimen>
-    <dimen name="training_title_padding_horizontal">14dp</dimen>
+    <dimen name="training_title_padding_horizontal">28dp</dimen>
     <dimen name="training_list_item_padding">4dp</dimen>
     <dimen name="training_list_item_text_padding">4dp</dimen>
     <dimen name="training_list_item_corner_radius">26dp</dimen>
@@ -58,7 +58,8 @@
     <dimen name="training_heading_size">12sp</dimen>
     <dimen name="training_heading_height">20sp</dimen>
     <dimen name="training_icon_button_horizontal_margin">6dp</dimen>
-    <dimen name="training_list_margin_top">12dp</dimen>
+    <dimen name="training_list_margin_top">16dp</dimen>
+    <dimen name="training_navigation_padding_top">16dp</dimen>
 
     <!-- Labels -->
     <dimen name="label_dialog_padding">8dp</dimen>

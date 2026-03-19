@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -29,10 +29,10 @@ extern "C" {
 #define OPT_WORD_FALSE "off"
 
 typedef enum {
-  OPT_Extend = 0X01,
-  OPT_Config = 0X02,
-  OPT_EnvVar = 0X04,
-  OPT_Format = 0X08,
+  OPT_Extend	= 0X01,
+  OPT_Config	= 0X02,
+  OPT_EnvVar	= 0X04,
+  OPT_Format  	= 0X08,
 } CommandLineOptionFlag;
 
 typedef struct {
@@ -42,7 +42,7 @@ typedef struct {
 
   struct {
     const char *setting;
-    int (*adjust)(char **setting);
+    int (*adjust) (char **setting);
   } internal;
 
   unsigned char letter;
@@ -65,28 +65,23 @@ typedef struct {
   size_t count;
 } CommandLineOptions;
 
-#define BEGIN_OPTION_TABLE(name)                   \
-  static const CommandLineOption name##Table[] = { \
-      {.word = "help",                             \
-       .letter = 'h',                              \
-       .description = strtext("Show this usage summary, and then exit.")},
+#define BEGIN_OPTION_TABLE(name) \
+static const CommandLineOption name##Table[] = { \
+  { .word = "help", \
+    .letter = 'h', \
+    .description = strtext("Show this usage summary, and then exit.") \
+  },
 
-#define END_OPTION_TABLE(name)             \
-  }                                        \
-  ;                                        \
-  static const CommandLineOptions name = { \
-      .table = name##Table,                \
-      .count = ARRAY_COUNT(name##Table),   \
-  };
+#define END_OPTION_TABLE(name) }; \
+static const CommandLineOptions name = { \
+  .table = name##Table, \
+  .count = ARRAY_COUNT(name##Table), \
+};
 
 #define DECLARE_USAGE_NOTES(name) const char *const name[]
 #define BEGIN_USAGE_NOTES(name) DECLARE_USAGE_NOTES(name) = {
-#define END_USAGE_NOTES \
-  NULL                  \
-  }                     \
-  ;
-#define USAGE_NOTES(...) \
-  (const char *const *const[]) { __VA_ARGS__, NULL }
+#define END_USAGE_NOTES NULL};
+#define USAGE_NOTES(...) (const char *const *const []){__VA_ARGS__, NULL}
 
 typedef struct {
   const char *purpose;

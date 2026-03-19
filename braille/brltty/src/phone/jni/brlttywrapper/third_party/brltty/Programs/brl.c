@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -43,6 +43,9 @@ constructBrailleDisplay (BrailleDisplay *brl) {
   brl->setBrailleFirmness = NULL;
   brl->setTouchSensitivity = NULL;
   brl->setAutorepeatProperties = NULL;
+
+  brl->getDriverProperty = NULL;
+  brl->setDriverProperty = NULL;
 
   brl->textColumns = 0;
   brl->textRows = 1;

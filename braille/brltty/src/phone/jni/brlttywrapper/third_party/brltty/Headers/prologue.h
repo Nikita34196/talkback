@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -147,6 +147,7 @@ static inline void __sync_synchronize (void) {}
 #endif /* __MINGW32__ */
 
 #include <windows.h>
+#include <winerror.h>
 #endif /* WINDOWS */
 
 #ifdef __MINGW32__

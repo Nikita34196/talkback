@@ -31,6 +31,7 @@ import com.google.android.accessibility.talkback.Pipeline;
 import com.google.android.accessibility.talkback.PrimesController;
 import com.google.android.accessibility.talkback.PrimesController.TimerAction;
 import com.google.android.accessibility.talkback.actor.helper.FocusActorHelper;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.talkback.focusmanagement.NavigationTarget;
 import com.google.android.accessibility.talkback.focusmanagement.interpreter.ScreenState;
 import com.google.android.accessibility.talkback.focusmanagement.record.AccessibilityFocusActionHistory;
@@ -45,6 +46,8 @@ import com.google.android.accessibility.utils.FocusFinder;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.Role;
+import com.google.android.accessibility.utils.WebInterfaceUtils;
+import com.google.android.accessibility.utils.traversal.OrderedTraversalStrategyConfig;
 import com.google.android.accessibility.utils.traversal.TraversalStrategy;
 import com.google.android.accessibility.utils.traversal.TraversalStrategyUtils;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
@@ -88,7 +91,9 @@ public class FocusActorForScreenStateChange {
   private final InputMethodMonitor inputMethodMonitor;
   private final FocusFinder focusFinder;
   private final AccessibilityService service;
-  private final FormFactorUtils formFactorUtils;
+
+  /** TODO: Experimental code. Remove {@code makeFabFirst} when experiment is done. */
+  private final boolean makeFabFirst;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   // Construction methods
@@ -102,7 +107,7 @@ public class FocusActorForScreenStateChange {
     this.focusFinder = focusFinder;
     this.service = service;
     this.inputMethodMonitor = inputMethodMonitor;
-    formFactorUtils = FormFactorUtils.getInstance();
+    makeFabFirst = FeatureFlagReader.makeFabFirst(service);
   }
 
   public void setPipeline(Pipeline.FeedbackReturner pipeline) {
@@ -180,19 +185,23 @@ public class FocusActorForScreenStateChange {
     int windowType = AccessibilityWindowInfoUtils.getType(currentActiveWindow);
     WindowIdentifier windowIdentifier = WindowIdentifier.create(windowId, screenState);
 
-    if (windowType == AccessibilityWindowInfo.TYPE_SYSTEM) {
-      // Don't restore focus in system window. A exemption is when context menu closes, we might
-      // restore focus in a system window in restoreFocusForContextMenu().
-      LogUtils.d(TAG, "Do not restore focus in system ui window.");
-      return false;
-    }
-
     if (lastFocusAction == null) {
       lastFocusAction = history.getLastFocusActionRecordInWindow(windowIdentifier);
     }
     if (lastFocusAction == null) {
       return false;
     }
+
+    int lastFocusedWindowType =
+        AccessibilityWindowInfoUtils.getType(
+            AccessibilityNodeInfoUtils.getWindow(lastFocusAction.getFocusedNode()));
+    if (windowType == AccessibilityWindowInfo.TYPE_SYSTEM
+        && lastFocusedWindowType != AccessibilityWindowInfo.TYPE_SYSTEM) {
+      // Don't restore focus in system window if the last focused window is not system window.
+      LogUtils.d(TAG, "Do not restore focus in system ui window.");
+      return false;
+    }
+
     long startTime = primesController.getTime();
 
     AccessibilityNodeInfoCompat nodeToRestoreFocus =
@@ -204,20 +213,25 @@ public class FocusActorForScreenStateChange {
     FocusActionInfo focusActionInfo =
         FOCUS_ACTION_INFO_RESTORED_BUILDER.setForceMuteFeedback(forceMuteFeedback).build();
 
+    if ((nodeToRestoreFocus == null)
+        || !nodeToRestoreFocus.isVisibleToUser()
+        // When a pane changes, the nodes not in the pane become out of the window even though
+        // they are still visible to user. The window id and title don't change, so the last
+        // focused node, which searches from getFocusHistory(), may not be in the window.
+        // b/365017291: Only check native nodes because sometimes the WebView is gone in the node
+        // tree.
+        || (!WebInterfaceUtils.isWebContainer(nodeToRestoreFocus)
+            && !AccessibilityNodeInfoUtils.isInWindow(nodeToRestoreFocus, currentActiveWindow))) {
+      LogUtils.e(TAG, "Do not restore focus from the invalid node " + nodeToRestoreFocus);
+      return false;
+    }
     boolean success =
-        (nodeToRestoreFocus != null)
-            && nodeToRestoreFocus.isVisibleToUser()
-            // When a pane changes, the nodes not in the pane become out of the window even though
-            // they are still visible to user. The window id and title don't change, so the last
-            // focused node, which searches from getFocusHistory(), may not be in the window.
-            && AccessibilityNodeInfoUtils.isInWindow(
-                nodeToRestoreFocus, AccessibilityNodeInfoUtils.getWindow(root))
-            // TODO: Remove workaround solution. Adds setForceRefocus(true) to forces
-            // node to clear accessibility focus because nodeToRestoreFocus from
-            // lastFocusedNode.refresh() gets wrong status of accessibility focus of node. It is
-            // redundant if Chrome fixes this bug.
-            && pipeline.returnFeedback(
-                eventId, Feedback.focus(nodeToRestoreFocus, focusActionInfo).setForceRefocus(true));
+        // TODO: Remove workaround solution. Adds setForceRefocus(true) to forces
+        // node to clear accessibility focus because nodeToRestoreFocus from
+        // lastFocusedNode.refresh() gets wrong status of accessibility focus of node. It is
+        // redundant if Chrome fixes this bug.
+        pipeline.returnFeedback(
+            eventId, Feedback.focus(nodeToRestoreFocus, focusActionInfo).setForceRefocus(true));
 
     if (firstTime && success) {
       screenState.consumeInterpretFirstTimeWhenWakeUp();
@@ -344,7 +358,7 @@ public class FocusActorForScreenStateChange {
   }
 
   private boolean restrictFocusSyncToEditable() {
-    return !formFactorUtils.isAndroidTv();
+    return !FormFactorUtils.isAndroidTv();
   }
 
   /**
@@ -371,14 +385,20 @@ public class FocusActorForScreenStateChange {
 
     TraversalStrategy traversalStrategy =
         TraversalStrategyUtils.getTraversalStrategy(
-            root, focusFinder, TraversalStrategy.SEARCH_FOCUS_FORWARD);
+            root,
+            focusFinder,
+            OrderedTraversalStrategyConfig.builder()
+                .setSearchDirection(SEARCH_FOCUS_FORWARD)
+                .setMakeFabFirst(makeFabFirst)
+                .build());
+
     final Map<AccessibilityNodeInfoCompat, Boolean> speakingNodesCache =
         traversalStrategy.getSpeakingNodesCache();
 
     Filter<AccessibilityNodeInfoCompat> nodeFilter =
         NavigationTarget.createNodeFilter(NavigationTarget.TARGET_DEFAULT, speakingNodesCache);
 
-    if (formFactorUtils.isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       nodeFilter =
           AccessibilityNodeInfoUtils.getFilterExcludingSmallTopAndBottomBorderNode(service)
               .and(nodeFilter);

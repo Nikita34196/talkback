@@ -51,7 +51,7 @@ public class BrailleElementsActivity extends PreferencesActivity {
   }
 
   /** Fragment that holds the braille elements preference. */
-  public static class BrailleElementsFragment extends PreferenceFragmentCompat {
+    public static class BrailleElementsFragment extends PreferenceFragmentCompat {
 
     private PreferenceScreen preferenceScreen;
 
@@ -82,13 +82,15 @@ public class BrailleElementsActivity extends PreferencesActivity {
       // won't take effect.
       Preference checkedPreference =
           preferenceScreen.findPreference(getString(R.string.pref_key_bd_braille_elements_checked));
-      Preference expandedPreference =
-          preferenceScreen.findPreference(
-              getString(R.string.pref_key_bd_braille_elements_expanded));
       checkedPreference.setTitle(
           getTextWithTtsSpan(
               getString(R.string.bd_braille_elements_checked),
               getString(R.string.bd_braille_elements_checked_content_description)));
+
+      Preference expandedPreference =
+          preferenceScreen.findPreference(
+              getString(R.string.pref_key_bd_braille_elements_expanded));
+
       expandedPreference.setTitle(
           getTextWithTtsSpan(
               getString(R.string.bd_braille_elements_expanded),

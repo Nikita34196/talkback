@@ -58,6 +58,10 @@ public class AiCoreEndpoint implements GeminiEndpoint {
     return false;
   }
 
+  public boolean isAiFeatureDownloading() {
+    return false;
+  }
+
   public boolean isAiFeatureDownloadable() {
     return false;
   }

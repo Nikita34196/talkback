@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -24,7 +24,7 @@
 #define UNAUTH_TIMEOUT 30
 
 #define RELEASE "BrlAPI Server: release " BRLAPI_RELEASE
-#define COPYRIGHT "   Copyright (C) 2002-2023 by Sébastien Hinderer <Sebastien.Hinderer@ens-lyon.org>, \
+#define COPYRIGHT "   Copyright (C) 2002-2024 by Sébastien Hinderer <Sebastien.Hinderer@ens-lyon.org>, \
 Samuel Thibault <samuel.thibault@ens-lyon.org>"
 
 #include "prologue.h"
@@ -1478,6 +1478,11 @@ PARAM_WRITER(clientPriority)
   PARAM_ASSERT_SIZE(clientPriority);
 
   lockMutex(&apiConnectionsMutex);
+    logMessage(LOG_CATEGORY(SERVER_EVENTS),
+      "fd %"PRIfd": setting client priority %"PRIu32,
+      c->fd, *clientPriority
+    );
+
     c->client_priority = *clientPriority;
 
     if (c->tty) {
@@ -2044,6 +2049,35 @@ PARAM_WRITER(messageLocale)
   return param_writeString(changeMessageLocale, data, size);
 }
 
+/* BRLAPI_PARAM_DRIVER_PROPERTY_VALUE */
+PARAM_READER(driverPropertyValue)
+{
+  if (!brl.getDriverProperty) return "no gettable driver properties";
+  uint64_t value;
+  if (!brl.getDriverProperty(&brl, subparam, &value)) return "cannot get driver property";
+
+  brlapi_param_driverPropertyValue_t *propertyValue = data;
+  *size = sizeof(*propertyValue);
+  *propertyValue = value;
+  return NULL;
+}
+
+PARAM_WRITER(driverPropertyValue)
+{
+  if (!brl.setDriverProperty) return "no settable driver properties";
+
+  const brlapi_param_driverPropertyValue_t *propertyValue = data;
+  PARAM_ASSERT_SIZE(propertyValue);
+
+  logMessage(LOG_CATEGORY(SERVER_EVENTS),
+    "fd %"PRIfd": setting driver property %"PRIu64"=%"PRIu64,
+    c->fd, subparam, *propertyValue
+  );
+
+  if (!brl.setDriverProperty(&brl, subparam, *propertyValue)) return "cannot set driver property";
+  return NULL;
+}
+
 typedef struct {
   unsigned local:1;
   unsigned global:1;
@@ -2239,6 +2273,13 @@ static const ParamDispatch paramDispatch[BRLAPI_PARAM_COUNT] = {
     .read = param_messageLocale_read,
     .write = param_messageLocale_write,
   },
+
+//Driver-speciic Parameters
+  [BRLAPI_PARAM_DRIVER_PROPERTY_VALUE] = {
+    .global = 1,
+    .read = param_driverPropertyValue_read,
+    .write = param_driverPropertyValue_write,
+  },
 };
 
 static inline const ParamDispatch *param_getDispatch(brlapi_param_t parameter)
@@ -2289,9 +2330,11 @@ static int handleParamValue(Connection *c, brlapi_packetType_t type, brlapi_pack
   if (!checkParamLocalGlobal(c, param, flags))
     return 0;
 
-  subparam = ((brlapi_param_subparam_t)ntohl(paramValue->subparam_hi) << 32) || ntohl(paramValue->subparam_lo);
+  subparam = ((brlapi_param_subparam_t)ntohl(paramValue->subparam_hi) << 32) | ntohl(paramValue->subparam_lo);
   size -= sizeof(flags) + sizeof(param) + sizeof(subparam);
   _brlapi_ntohParameter(param, paramValue, size);
+
+  logMessage(LOG_CATEGORY(SERVER_EVENTS), "got parameter %"PRIx32" update from fd %"PRIfd,param,c->fd);
 
   {
     const char *error;
@@ -4043,6 +4086,16 @@ static int initializeAcceptedKeys(Connection *c, int how)
 
         { .action = removeKeyrange,
           .type = brlapi_rangeType_command,
+          .code = BRLAPI_KEY_TYPE_CMD | BRLAPI_KEY_CMD_MACRO
+        },
+
+        { .action = removeKeyrange,
+          .type = brlapi_rangeType_command,
+          .code = BRLAPI_KEY_TYPE_CMD | BRLAPI_KEY_CMD_HOSTCMD
+        },
+
+        { .action = removeKeyrange,
+          .type = brlapi_rangeType_command,
           .code = BRLAPI_KEY_TYPE_CMD | BRLAPI_KEY_CMD_ALERT
         },
 
@@ -4206,10 +4259,12 @@ static void broadcastKey(Tty *tty, brlapi_keyCode_t code, unsigned int how) {
   Connection *c;
   Tty *t;
   for (c=tty->connections->next; c!=tty->connections; c = c->next) {
+    int pass;
     lockMutex(&c->acceptedKeysMutex);
-    if ((c->how==how) && (inKeyrangeList(c->acceptedKeys,code) != NULL))
-      writeKey(c->fd,code);
+    pass = ((c->how==how) && (inKeyrangeList(c->acceptedKeys,code) != NULL));
     unlockMutex(&c->acceptedKeysMutex);
+    if (pass)
+      writeKey(c->fd,code);
   }
   for (t = tty->subttys; t; t = t->next)
     broadcastKey(t, code, how);

@@ -23,6 +23,8 @@ typedef enum {
   HID_KEY_Dot7,
   HID_KEY_Dot8,
   HID_KEY_Space,
+  HID_KEY_SpaceLeft,
+  HID_KEY_SpaceRight,
 
   HID_KEY_PanLeft,
   HID_KEY_PanRight,
@@ -35,6 +37,13 @@ typedef enum {
 
   HID_KEY_RockerUp,
   HID_KEY_RockerDown,
+  HID_KEY_RockerPress,
+
+  HID_KEY_JoystickCenter,
+  HID_KEY_JoystickUp,
+  HID_KEY_JoystickDown,
+  HID_KEY_JoystickLeft,
+  HID_KEY_JoystickRight,
 
   HID_KEY_ROUTING,
 } HID_Keys;
@@ -50,6 +59,8 @@ int KEY_MAP[][2] = {
     {HID_USG_BRL_KeyboardDot7, HID_KEY_Dot7},
     {HID_USG_BRL_KeyboardDot8, HID_KEY_Dot8},
     {HID_USG_BRL_KeyboardSpace, HID_KEY_Space},
+    {HID_USG_BRL_KeyboardLeftSpace, HID_KEY_SpaceLeft},
+    {HID_USG_BRL_KeyboardRightSpace, HID_KEY_SpaceRight},
     {HID_USG_BRL_PanLeft, HID_KEY_PanLeft},
     {HID_USG_BRL_PanRight, HID_KEY_PanRight},
     {HID_USG_BRL_DPadUp, HID_KEY_DPadUp},
@@ -59,6 +70,12 @@ int KEY_MAP[][2] = {
     {HID_USG_BRL_DPadCenter, HID_KEY_DPadCenter},
     {HID_USG_BRL_RockerUp, HID_KEY_RockerUp},
     {HID_USG_BRL_RockerDown, HID_KEY_RockerDown},
+    {HID_USG_BRL_RockerPress, HID_KEY_RockerPress},
+    {HID_USG_BRL_JoystickCenter, HID_KEY_JoystickCenter},
+    {HID_USG_BRL_JoystickUp, HID_KEY_JoystickUp},
+    {HID_USG_BRL_JoystickDown, HID_KEY_JoystickDown},
+    {HID_USG_BRL_JoystickLeft, HID_KEY_JoystickLeft},
+    {HID_USG_BRL_JoystickRight, HID_KEY_JoystickRight},
     // Router keys are handled separately.
 };
 int KEY_MAP_COUNT = sizeof(KEY_MAP) / sizeof(KEY_MAP[0]);
@@ -76,6 +93,8 @@ static const KeyNameEntry keyNameTable[] = {
     {.value.number = HID_KEY_Dot7, .name = "Dot7"},
     {.value.number = HID_KEY_Dot8, .name = "Dot8"},
     {.value.number = HID_KEY_Space, .name = "Space"},
+    {.value.number = HID_KEY_SpaceLeft, .name = "SpaceLeft"},
+    {.value.number = HID_KEY_SpaceRight, .name = "SpaceRight"},
     {.value.number = HID_KEY_PanLeft, .name = "PanLeft"},
     {.value.number = HID_KEY_PanRight, .name = "PanRight"},
     {.value.number = HID_KEY_DPadUp, .name = "DPadUp"},
@@ -85,6 +104,12 @@ static const KeyNameEntry keyNameTable[] = {
     {.value.number = HID_KEY_DPadCenter, .name = "DPadCenter"},
     {.value.number = HID_KEY_RockerUp, .name = "RockerUp"},
     {.value.number = HID_KEY_RockerDown, .name = "RockerDown"},
+    {.value.number = HID_KEY_RockerPress, .name = "RockerPress"},
+    {.value.number = HID_KEY_JoystickCenter, .name = "JoystickCenter"},
+    {.value.number = HID_KEY_JoystickUp, .name = "JoystickUp"},
+    {.value.number = HID_KEY_JoystickDown, .name = "JoystickDown"},
+    {.value.number = HID_KEY_JoystickLeft, .name = "JoystickLeft"},
+    {.value.number = HID_KEY_JoystickRight, .name = "JoystickRight"},
     {.value = {.group = HID_GRP_RoutingKeys, .number = KTB_KEY_ANY},
      .name = "RoutingKey"},
     {.name = NULL}};

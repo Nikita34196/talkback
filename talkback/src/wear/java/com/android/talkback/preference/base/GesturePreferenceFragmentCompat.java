@@ -20,9 +20,13 @@ import static com.google.android.accessibility.talkback.preference.base.GestureL
 import static com.google.android.accessibility.talkback.preference.base.GestureListPreference.TYPE_TITLE;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Parcelable;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.RecyclerView.LayoutManager;
@@ -30,22 +34,18 @@ import androidx.recyclerview.widget.RecyclerView.Recycler;
 import androidx.recyclerview.widget.RecyclerView.State;
 import androidx.recyclerview.widget.RecyclerView.ViewHolder;
 import android.text.TextUtils;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
-import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionInfoCompat;
 import androidx.preference.Preference;
 import androidx.preference.Preference.OnPreferenceChangeListener;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
+import com.google.android.accessibility.material.preference.AccessibilitySuitePreferenceCategory;
+import com.google.android.accessibility.material.preference.AccessibilitySuiteRadioButtonPreference;
 import com.google.android.accessibility.talkback.preference.base.GestureListPreference.ActionItem;
-import com.google.android.accessibility.utils.R;
-import com.google.android.accessibility.utils.material.WrapSwipeDismissLayoutHelper;
-import com.google.android.accessibility.utils.preference.AccessibilitySuitePreferenceCategory;
-import com.google.android.accessibility.utils.preference.AccessibilitySuiteRadioButtonPreference;
+import com.google.android.accessibility.utils.PreferenceSettingsUtils;
+import com.google.android.accessibility.utils.SharedPreferencesUtils;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import javax.annotation.Nullable;
 
@@ -56,6 +56,15 @@ import javax.annotation.Nullable;
  */
 public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
   private static final String TAG = "GesturePreferenceFragmentCompat";
+
+  private static final String GESTURE_TITLE = "GESTURE_TITLE";
+  private static final String GESTURE_INITIAL_VALUE = "GESTURE_INITIAL_VALUE";
+  private static final String GESTURE_ACTION_ITEMS = "GESTURE_ACTION_ITEMS";
+
+  private Parcelable[] items;
+  private CharSequence title;
+  private String initialValue;
+  private String preferenceKey;
 
   private final OnPreferenceChangeListener onPreferenceChangeListener =
       new OnPreferenceChangeListener() {
@@ -69,10 +78,9 @@ public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
             return false;
           }
 
-          ActionItem item = targetGestureListPreference.getActionItems()[preference.getOrder()];
-          targetGestureListPreference.setValue(item.value);
-          targetGestureListPreference.setSummary(item.text);
-
+          ActionItem item = (ActionItem) items[preference.getOrder()];
+          SharedPreferences prefs = SharedPreferencesUtils.getSharedPreferences(getContext());
+          prefs.edit().putString(preferenceKey, item.value).apply();
           popBackStack();
           return true;
         }
@@ -110,28 +118,22 @@ public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
         }
       };
 
-  private View targetFragmentView;
-  private GestureListPreference targetGestureListPreference;
   private int selectedPosition;
 
   /** Creates the fragment from given {@link GestureListPreference}. */
+  @Nullable
   public static GesturePreferenceFragmentCompat create(GestureListPreference preference) {
-    GesturePreferenceFragmentCompat fragment = new GesturePreferenceFragmentCompat();
-    Bundle args = new Bundle(1);
-    args.putString(ARG_PREFERENCE_ROOT, preference.getKey());
-    fragment.setArguments(args);
-    return fragment;
+    // Do nothing.
+    return null;
   }
 
-  @Override
-  public View onCreateView(
-      LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-    View view = super.onCreateView(inflater, container, savedInstanceState);
-    // Intentionally set it as a background color. Or, it will be a transparent background.
-    view.setBackgroundColor(
-        getResources()
-            .getColor(R.color.a11y_wear_material_color_background, getContext().getTheme()));
-    return view;
+  public static Bundle createBundleForFragmentArguments(GestureListPreference preference) {
+    Bundle bundle = new Bundle();
+    bundle.putString(ARG_PREFERENCE_ROOT, preference.getKey());
+    bundle.putCharSequence(GESTURE_TITLE, preference.getTitle());
+    bundle.putString(GESTURE_INITIAL_VALUE, preference.getCurrentValue());
+    bundle.putParcelableArray(GESTURE_ACTION_ITEMS, preference.getActionItems());
+    return bundle;
   }
 
   @Override
@@ -139,18 +141,7 @@ public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
     super.onViewCreated(view, savedInstanceState);
     if (savedInstanceState == null) {
       // We post a runnable to scroll to the selected position in the 1st time.
-      handler.post(scrollRunnable);
-
-      requireActivity()
-          .getOnBackPressedDispatcher()
-          .addCallback(
-              this,
-              new OnBackPressedCallback(true) {
-                @Override
-                public void handleOnBackPressed() {
-                  popBackStack();
-                }
-              });
+      handler.postDelayed(scrollRunnable, 100);
     }
   }
 
@@ -166,60 +157,53 @@ public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
     };
   }
 
-  @Override
-  protected View wrapSwipeDismissLayout(View view) {
-    // We override it since we want to pop the fragment in the parent fragment manager.
-    return WrapSwipeDismissLayoutHelper.wrapSwipeDismissLayout(
-        getActivity(),
-        view,
-        activity -> {
-          popBackStack();
-          return true;
-        });
-  }
-
   /** Pops back the fragment and restores the a11y importance attribute for the parent fragment. */
   private void popBackStack() {
-    // When we pop back to the parent fragment, we need to restore the a11y importance attribute.
-    targetFragmentView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
-    // To support Wear rotary input.
-    targetFragmentView.requestFocus();
-    getParentFragmentManager().popBackStackImmediate();
+    FragmentActivity activity = getActivity();
+    if (activity == null) {
+      return;
+    }
+    FragmentManager fragmentManager = getParentFragmentManager();
+    fragmentManager.popBackStackImmediate();
+    if (fragmentManager.getBackStackEntryCount() == 0) {
+      activity.finish();
+    }
   }
 
   @Override
   protected CharSequence getTitle() {
-    return targetGestureListPreference.getTitle();
+    return title;
   }
 
   @Override
   public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
-    PreferenceFragmentCompat fragment = (PreferenceFragmentCompat) getTargetFragment();
-    targetFragmentView = fragment.requireView();
-    // We add this fragment onto the parent fragment, so we need to hide the parent's views.
-    targetFragmentView.setImportantForAccessibility(
-        View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
-    targetGestureListPreference = fragment.findPreference(rootKey);
-    setPreferenceScreen(createPreferenceScreen());
+    Bundle bundle = getArguments();
+    if (bundle == null) {
+      throw new IllegalArgumentException();
+    }
+    title = bundle.getCharSequence(GESTURE_TITLE);
+    initialValue = bundle.getString(GESTURE_INITIAL_VALUE);
+    items = bundle.getParcelableArray(GESTURE_ACTION_ITEMS);
+    preferenceKey = rootKey;
+
+    PreferenceSettingsUtils.setPreferenceScreen(this, createPreferenceScreen());
   }
 
   private PreferenceScreen createPreferenceScreen() {
     PreferenceScreen preferenceScreen = getPreferenceManager().createPreferenceScreen(getContext());
-    String initialValue = targetGestureListPreference.getCurrentValue();
-    ActionItem[] items = targetGestureListPreference.getActionItems();
     Context context = getContext();
 
     AccessibilitySuitePreferenceCategory category = null;
     ActionItem item;
     for (int order = 0; order < items.length; order++) {
-      item = items[order];
+      item = (ActionItem) items[order];
       switch (item.viewType) {
-        case TYPE_TITLE:
+        case TYPE_TITLE -> {
           category = new AccessibilitySuitePreferenceCategory(getContext());
           category.setTitle(item.text);
           preferenceScreen.addPreference(category);
-          break;
-        case TYPE_ACTION_ITEM:
+        }
+        case TYPE_ACTION_ITEM -> {
           AccessibilitySuiteRadioButtonPreference radioButtonPreference =
               new AccessibilitySuiteRadioButtonPreference(context);
           radioButtonPreference.setTitle(item.text);
@@ -227,6 +211,7 @@ public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
           radioButtonPreference.setChecked(checked);
           radioButtonPreference.setOnPreferenceChangeListener(onPreferenceChangeListener);
           radioButtonPreference.setOrder(order);
+          radioButtonPreference.setSingleLineTitle(false);
           if (category == null) {
             // We create a category without title to add the beginning preference (e.g., "Tap to
             // assign").
@@ -237,8 +222,8 @@ public class GesturePreferenceFragmentCompat extends TalkbackBaseFragment {
           if (checked) {
             selectedPosition = order;
           }
-          break;
-        default: // fall out
+        }
+        default -> {}
       }
     }
 

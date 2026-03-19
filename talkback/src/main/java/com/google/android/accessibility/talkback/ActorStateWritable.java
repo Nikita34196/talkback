@@ -25,8 +25,10 @@ import com.google.android.accessibility.talkback.actor.FullScreenReadActor;
 import com.google.android.accessibility.talkback.actor.LanguageActor;
 import com.google.android.accessibility.talkback.actor.NodeActionPerformer;
 import com.google.android.accessibility.talkback.actor.PassThroughModeActor;
-import com.google.android.accessibility.talkback.actor.SpeechRateActor;
+import com.google.android.accessibility.talkback.actor.SpeechRateAndPitchActor;
+import com.google.android.accessibility.talkback.actor.TextEditActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiActor;
+import com.google.android.accessibility.talkback.actor.search.UniversalSearchActor;
 import com.google.android.accessibility.talkback.focusmanagement.record.AccessibilityFocusActionHistory;
 import com.google.android.accessibility.utils.StringBuilderUtils;
 import com.google.android.accessibility.utils.labeling.LabelManager;
@@ -100,7 +102,7 @@ public class ActorStateWritable {
   public final LanguageActor.State languageState;
 
   /** Read-only on-demand data-puller for speech rate state data. */
-  public final SpeechRateActor.State speechRateState;
+  public final SpeechRateAndPitchActor.RateState speechRateState;
 
   /** Read-only on-demand data-puller for pass-through mode state data. */
   public final PassThroughModeActor.State passThroughModeState;
@@ -110,6 +112,12 @@ public class ActorStateWritable {
 
   /** Read-only on-demand data-reader for Gemini state data. */
   public final GeminiActor.State geminiState;
+
+  /** Read-only on-demand data-puller for search state data. */
+  public final UniversalSearchActor.State searchState;
+
+  /** Read-only on0demand data-reader for text edit state data. */
+  public final TextEditActor.State editState;
 
   //////////////////////////////////////////////////////////////////////////
   // Construction methods
@@ -123,10 +131,12 @@ public class ActorStateWritable {
       DirectionNavigationActor.StateReader directionNavigation,
       NodeActionPerformer.StateReader nodeActionState,
       LanguageActor.State languageState,
-      SpeechRateActor.State speechRateState,
+      SpeechRateAndPitchActor.RateState speechRateState,
       PassThroughModeActor.State passThroughModeState,
       LabelManager.State labelerState,
-      GeminiActor.State geminiState) {
+      GeminiActor.State geminiState,
+      UniversalSearchActor.State searchState,
+      TextEditActor.State editState) {
     this.dimScreen = dimScreen;
     this.speechState = speechState;
     this.continuousRead = continuousRead;
@@ -139,6 +149,8 @@ public class ActorStateWritable {
     this.passThroughModeState = passThroughModeState;
     this.labelerState = labelerState;
     this.geminiState = geminiState;
+    this.searchState = searchState;
+    this.editState = editState;
   }
 
   //////////////////////////////////////////////////////////////////////////
@@ -188,8 +200,8 @@ public class ActorStateWritable {
     return StringBuilderUtils.joinFields(
         StringBuilderUtils.optionalTag("isSpeaking", speechState.isSpeaking()),
         StringBuilderUtils.optionalTag(
-            "isSpeakingOrQueuedAndNotSourceIsVolumeAnnouncment",
-            speechState.isSpeakingOrQueuedAndNotSourceIsVolumeAnnouncment()),
+            "isSpeakingOrQueuedAndNotSourceIsVolumeAnnouncement",
+            speechState.isSpeakingOrQueuedAndNotSourceIsVolumeAnnouncement()),
         StringBuilderUtils.optionalInt("lastWindowId", lastWindowId, -1),
         StringBuilderUtils.optionalInt("lastWindowIdUptimeMs", lastWindowIdUptimeMs, 0),
         StringBuilderUtils.optionalSubObj("inputFocusActionRecord", inputFocusActionRecord),
@@ -206,6 +218,7 @@ public class ActorStateWritable {
         StringBuilderUtils.optionalTag(
             "passThroughModeState", passThroughModeState.isPassThroughModeActive()),
         StringBuilderUtils.optionalTag("hasAiCore", geminiState.hasAiCore()),
-        StringBuilderUtils.optionalTag("isAiFeatureAvailable", geminiState.isAiFeatureAvailable()));
+        StringBuilderUtils.optionalTag("isAiFeatureAvailable", geminiState.isAiFeatureAvailable()),
+        StringBuilderUtils.optionalText("searchKeyword", searchState.getLastKeyword()));
   }
 }

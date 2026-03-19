@@ -17,6 +17,8 @@
 package com.google.android.accessibility.talkback;
 
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SHOW_ON_SCREEN;
+import static com.google.android.accessibility.talkback.actor.ImageCaptioner.GEMINI_DESCRIBE_IMAGE;
+import static com.google.android.accessibility.talkback.actor.ImageCaptioner.GEMINI_DESCRIBE_SCREEN;
 import static com.google.android.accessibility.talkback.focusmanagement.NavigationTarget.TARGET_DEFAULT;
 import static com.google.android.accessibility.utils.AccessibilityNodeInfoUtils.toStringShort;
 import static com.google.android.accessibility.utils.monitor.InputModeTracker.INPUT_MODE_UNKNOWN;
@@ -32,14 +34,24 @@ import android.graphics.Rect;
 import android.graphics.Region;
 import android.os.Bundle;
 import android.text.TextUtils;
+import androidx.annotation.IntDef;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import com.google.android.accessibility.gemineye.api.AccessibilityTree;
+import com.google.android.accessibility.gemineye.screenoverview.json.ChatHistoryItem;
 import com.google.android.accessibility.talkback.Feedback.AdjustVolume.StreamType;
 import com.google.android.accessibility.talkback.Feedback.Scroll.Action;
+import com.google.android.accessibility.talkback.Feedback.TalkBackUI.Item;
+import com.google.android.accessibility.talkback.Feedback.TouchLatency.LatencyAction;
+import com.google.android.accessibility.talkback.actor.ImageCaptioner.GeminiFeatureType;
 import com.google.android.accessibility.talkback.actor.TalkBackUIActor;
+import com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason;
+import com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason;
+import com.google.android.accessibility.talkback.actor.gemini.screenqa.OverviewResponse;
 import com.google.android.accessibility.talkback.focusmanagement.NavigationTarget.TargetType;
 import com.google.android.accessibility.talkback.focusmanagement.action.NavigationAction;
 import com.google.android.accessibility.talkback.focusmanagement.interpreter.ScreenState;
 import com.google.android.accessibility.talkback.focusmanagement.record.FocusActionInfo;
+import com.google.android.accessibility.talkback.imagecaption.Result;
 import com.google.android.accessibility.utils.AccessibilityNode;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils.SpellingSuggestion;
@@ -50,7 +62,9 @@ import com.google.android.accessibility.utils.input.CursorGranularity;
 import com.google.android.accessibility.utils.input.ScrollEventInterpreter.ScrollTimeout;
 import com.google.android.accessibility.utils.monitor.InputModeTracker.InputMode;
 import com.google.android.accessibility.utils.output.ScrollActionRecord;
+import com.google.android.accessibility.utils.output.ScrollActionRecord.AutoScrollSuccessChecker;
 import com.google.android.accessibility.utils.output.ScrollActionRecord.UserAction;
+import com.google.android.accessibility.utils.output.SpeechCacheManager.LoadSpeechResultNotifier;
 import com.google.android.accessibility.utils.output.SpeechController.SpeakOptions;
 import com.google.android.accessibility.utils.traversal.TraversalStrategy.SearchDirection;
 import com.google.android.accessibility.utils.traversal.TraversalStrategy.SearchDirectionOrUnknown;
@@ -84,6 +98,8 @@ public abstract class Feedback {
   private static final int NODE_ACTION_UNKNOWN = 0;
 
   /** Interrupt groups */
+  @IntDef({DEFAULT, HINT, GESTURE_VIBRATION})
+  @Retention(RetentionPolicy.SOURCE)
   public @interface InterruptGroup {}
 
   public static final int DEFAULT = -1;
@@ -91,6 +107,8 @@ public abstract class Feedback {
   public static final int GESTURE_VIBRATION = 1;
 
   /** Interrupt levels. Level 1 is default. Level -1 does not interrupt at all. */
+  @IntDef({-1, 0, 1, 2})
+  @Retention(RetentionPolicy.SOURCE)
   public @interface InterruptLevel {}
 
   //////////////////////////////////////////////////////////////////////////////////
@@ -136,13 +154,25 @@ public abstract class Feedback {
     return Part.builder().speech(text, options);
   }
 
+  public static Part.Builder synthesize(
+      CharSequence text, Bundle speechParams, LoadSpeechResultNotifier resultNotifier) {
+    SpeakOptions speakOptions = SpeakOptions.create();
+    speakOptions.setSpeechParams(speechParams);
+    return Part.builder().speechForSynthesis(text, resultNotifier, speakOptions);
+  }
+
   public static Part.Builder voiceRecognition(VoiceRecognition.Action action) {
-    return Part.builder()
-        .setVoiceRecognition(VoiceRecognition.create(action, /* checkDialog= */ false));
+    return voiceRecognition(action, /* checkDialog= */ false, /* nodeMenuShortcut= */ "");
   }
 
   public static Part.Builder voiceRecognition(VoiceRecognition.Action action, boolean checkDialog) {
-    return Part.builder().setVoiceRecognition(VoiceRecognition.create(action, checkDialog));
+    return voiceRecognition(action, checkDialog, /* nodeMenuShortcut= */ "");
+  }
+
+  public static Part.Builder voiceRecognition(
+      VoiceRecognition.Action action, boolean checkDialog, String nodeMenuShortcut) {
+    return Part.builder()
+        .setVoiceRecognition(VoiceRecognition.create(action, checkDialog, nodeMenuShortcut));
   }
 
   public static Part.Builder continuousRead(ContinuousRead.Action action) {
@@ -151,6 +181,10 @@ public abstract class Feedback {
 
   public static Part.Builder sound(int resourceId) {
     return Part.builder().sound(resourceId);
+  }
+
+  public static Part.Builder sound(int resourceId, boolean ignoreVolumeAdjustment) {
+    return Part.builder().sound(resourceId, ignoreVolumeAdjustment);
   }
 
   public static Part.Builder vibration(int resourceId) {
@@ -172,6 +206,10 @@ public abstract class Feedback {
 
   public static EditText.Builder edit(AccessibilityNodeInfoCompat node, EditText.Action action) {
     return EditText.builder().setNode(node).setAction(action);
+  }
+
+  public static Part.Builder touchLatency(boolean increaseLatency, LatencyAction action) {
+    return Part.builder().setTouchLatency(TouchLatency.create(increaseLatency, action));
   }
 
   public static Part.Builder systemAction(int systemActionId) {
@@ -208,12 +246,17 @@ public abstract class Feedback {
   }
 
   public static Part.Builder nodeAction(AccessibilityNode target, int actionId) {
+    return nodeAction(target, actionId, /* args= */ null);
+  }
+
+  public static Part.Builder nodeAction(
+      AccessibilityNode target, int actionId, @Nullable Bundle args) {
     Part.Builder partBuilder = Part.builder();
     if (target == null) {
       return partBuilder;
     }
     return partBuilder.setNodeAction(
-        NodeAction.builder().setTarget(target).setActionId(actionId).build());
+        NodeAction.builder().setTarget(target).setActionId(actionId).setArgs(args).build());
   }
 
   public static Part.Builder nodeAction(
@@ -297,6 +340,24 @@ public abstract class Feedback {
       @Nullable String source,
       ScrollTimeout scrollTimeout,
       int autoScrollAttempt) {
+    return scroll(
+        nodeCompat,
+        userAction,
+        nodeAction,
+        source,
+        scrollTimeout,
+        autoScrollAttempt,
+        /* autoScrollSuccessChecker= */ null);
+  }
+
+  public static Part.Builder scroll(
+      AccessibilityNodeInfoCompat nodeCompat,
+      @UserAction int userAction,
+      int nodeAction,
+      @Nullable String source,
+      ScrollTimeout scrollTimeout,
+      int autoScrollAttempt,
+      AutoScrollSuccessChecker autoScrollSuccessChecker) {
     return Part.builder()
         .setScroll(
             Scroll.builder()
@@ -304,6 +365,29 @@ public abstract class Feedback {
                 .setNodeCompat(nodeCompat)
                 .setUserAction(userAction)
                 .setNodeAction(nodeAction)
+                .setSource(source)
+                .setTimeout(scrollTimeout)
+                .setAutoScrollAttempt(autoScrollAttempt)
+                .setAutoScrollChecker(autoScrollSuccessChecker)
+                .build());
+  }
+
+  public static Part.Builder scrollToPosition(
+      AccessibilityNodeInfoCompat nodeCompat,
+      @UserAction int userAction,
+      int nodeAction,
+      Bundle args,
+      @Nullable String source,
+      ScrollTimeout scrollTimeout,
+      int autoScrollAttempt) {
+    return Part.builder()
+        .setScroll(
+            Scroll.builder()
+                .setAction(Scroll.Action.SCROLL)
+                .setNodeCompat(nodeCompat)
+                .setUserAction(userAction)
+                .setNodeAction(nodeAction)
+                .setArgs(args)
                 .setSource(source)
                 .setTimeout(scrollTimeout)
                 .setAutoScrollAttempt(autoScrollAttempt)
@@ -315,6 +399,16 @@ public abstract class Feedback {
         .setScroll(
             Scroll.builder()
                 .setAction(Scroll.Action.CANCEL_TIMEOUT)
+                .setUserAction(ScrollActionRecord.ACTION_UNKNOWN)
+                .setNodeAction(NODE_ACTION_UNKNOWN)
+                .build());
+  }
+
+  public static Part.Builder scrollResetScrollActionRecords() {
+    return Part.builder()
+        .setScroll(
+            Scroll.builder()
+                .setAction(Action.RESET_SCROLL_RECORDS)
                 .setUserAction(ScrollActionRecord.ACTION_UNKNOWN)
                 .setNodeAction(NODE_ACTION_UNKNOWN)
                 .build());
@@ -377,10 +471,13 @@ public abstract class Feedback {
   }
 
   public static FocusDirection.Builder directionNavigationFollowTo(
-      @Nullable AccessibilityNodeInfoCompat node, @SearchDirection int direction) {
+      @Nullable AccessibilityNodeInfoCompat node,
+      @Nullable CursorGranularity granularity,
+      @SearchDirection int direction) {
     return FocusDirection.builder()
         .setAction(FocusDirection.Action.FOLLOW)
         .setTargetNode(node)
+        .setGranularity(granularity)
         .setDirection(direction);
   }
 
@@ -468,14 +565,26 @@ public abstract class Feedback {
             FocusDirection.builder().setAction(FocusDirection.Action.SELECTION_MODE_OFF).build());
   }
 
+  public static FocusDirection.Builder navigateTable(
+      @SearchDirection int direction, @TargetType int targetType) {
+    return FocusDirection.builder()
+        .setAction(FocusDirection.Action.NAVIGATE)
+        .setDirection(direction)
+        .setTableTargetType(targetType);
+  }
+
   public static Part.Builder talkBackUI(TalkBackUI.Action action, TalkBackUIActor.Type type) {
     return Part.builder()
         .setTalkBackUI(TalkBackUI.create(action, type, /* message= */ null, /* showIcon= */ true));
   }
 
   public static Part.Builder talkBackUI(
-      TalkBackUI.Action action, TalkBackUIActor.Type type, CharSequence message, boolean showIcon) {
-    return Part.builder().setTalkBackUI(TalkBackUI.create(action, type, message, showIcon));
+      TalkBackUI.Action action,
+      TalkBackUIActor.Type type,
+      CharSequence message,
+      boolean showIcon,
+      TalkBackUI.Item item) {
+    return Part.builder().setTalkBackUI(TalkBackUI.create(action, type, message, showIcon, item));
   }
 
   public static Part.Builder showToast(
@@ -487,7 +596,19 @@ public abstract class Feedback {
       TalkBackUIActor.Type type, CharSequence message, boolean showIcon) {
     return Part.builder()
         .setTalkBackUI(
-            TalkBackUI.create(TalkBackUI.Action.SHOW_SELECTOR_UI, type, message, showIcon));
+            TalkBackUI.create(
+                TalkBackUI.Action.SHOW_SELECTOR_UI,
+                type,
+                message,
+                showIcon,
+                Item.ITEM_UNSPECIFIED));
+  }
+
+  public static Part.Builder showSelectorUI(
+      TalkBackUIActor.Type type, CharSequence message, boolean showIcon, TalkBackUI.Item item) {
+    return Part.builder()
+        .setTalkBackUI(
+            TalkBackUI.create(TalkBackUI.Action.SHOW_SELECTOR_UI, type, message, showIcon, item));
   }
 
   public static Part.Builder saveGesture(AccessibilityGestureEvent gestureEvent) {
@@ -496,6 +617,10 @@ public abstract class Feedback {
 
   public static Part.Builder reportGesture() {
     return Part.builder().setGesture(Gesture.create(Gesture.Action.REPORT));
+  }
+
+  public static Part.Builder keyboard(Keyboard.Action action) {
+    return Part.builder().setKeyboard(Keyboard.create(action));
   }
 
   public static Part.Builder deviceInfo(DeviceInfo.Action action, Configuration configuration) {
@@ -535,8 +660,22 @@ public abstract class Feedback {
                 .build());
   }
 
+  public static Part.Builder performScreenOverview(AccessibilityNodeInfoCompat node) {
+    return Part.builder()
+        .setImageCaption(
+            ImageCaption.builder()
+                .setAction(ImageCaption.Action.PERFORM_SCREEN_OVERVIEW)
+                .setTarget(node)
+                .build());
+  }
+
   public static Part.Builder responseImageCaptionResult(
-      int requestId, String text, boolean isSuccess, boolean manualTrigger) {
+      int requestId,
+      String text,
+      boolean isSuccess,
+      FinishReason finishReason,
+      ErrorReason errorReason,
+      boolean manualTrigger) {
     return Part.builder()
         .setImageCaptionResult(
             ImageCaptionResult.builder()
@@ -544,15 +683,52 @@ public abstract class Feedback {
                 .setText(text)
                 .setIsSuccess(isSuccess)
                 .setUserRequested(manualTrigger)
+                .setFinishReason(finishReason)
+                .setErrorReason(errorReason)
                 .build());
+  }
+
+  public static Part.Builder displayImageCaptionResultDialog(
+      int requestId,
+      Result imageDescriptionResult,
+      Result iconLabelResult,
+      Result ocrTextResult,
+      boolean isScreenDescription) {
+    return Part.builder()
+        .setGeminiResultDialog(
+            GeminiResultDialog.builder()
+                .setAction(GeminiResultDialog.Action.IMAGE_CAPTION_RESULT)
+                .setRequestId(requestId)
+                .setImageDescriptionResult(imageDescriptionResult)
+                .setIconLabelResult(iconLabelResult)
+                .setOcrTextResult(ocrTextResult)
+                .setIsScreenDescription(isScreenDescription)
+                .build());
+  }
+
+  public static Part.Builder responseScreenOverviewResult(
+      int requestId, OverviewResponse response) {
+    return Part.builder()
+        .setScreenOverviewResult(
+            ScreenOverviewResult.builder().setRequestId(requestId).setResponse(response).build());
   }
 
   public static Part.Builder performGeminiOptIn(AccessibilityNodeInfoCompat node) {
     return Part.builder()
         .setImageCaption(
             ImageCaption.builder()
-                .setAction(ImageCaption.Action.DETAILED_DESCRIPTION_OPT_IN)
+                .setAction(ImageCaption.Action.ONLINE_GEMINI_FEATURE_OPT_IN)
                 .setTarget(node)
+                .build());
+  }
+
+  public static Part.Builder performGeminiOptInForScreenOverview(AccessibilityNodeInfoCompat node) {
+    return Part.builder()
+        .setImageCaption(
+            ImageCaption.builder()
+                .setAction(ImageCaption.Action.ONLINE_GEMINI_FEATURE_OPT_IN)
+                .setTarget(node)
+                .setFeatureType(GEMINI_DESCRIBE_SCREEN)
                 .build());
   }
 
@@ -623,6 +799,11 @@ public abstract class Feedback {
                 .build());
   }
 
+  /** Signals the TTS overlay should be renewed due to a configuration change. */
+  public static Part.Builder updateSpeechOverlayLayout() {
+    return Part.builder().setUpdateSpeechOverlayLayout(UpdateSpeechOverlayLayout.create());
+  }
+
   public static Part.Builder geminiRequest(int requestId, String text, Bitmap image) {
     return Part.builder()
         .setGeminiRequest(
@@ -643,6 +824,42 @@ public abstract class Feedback {
                 .setAction(GeminiRequest.Action.REQUEST_ON_DEVICE_IMAGE_CAPTIONING)
                 .setRequestId(requestId)
                 .setImage(image)
+                .build());
+  }
+
+  public static Part.Builder geminiAction(GeminiRequest.Action action) {
+    return Part.builder().setGeminiRequest(GeminiRequest.builder().setAction(action).build());
+  }
+
+  public static Part.Builder geminiScreenOverview(
+      int requestId, AccessibilityNodeInfoCompat focusedNode, byte[] screenshot) {
+    return Part.builder()
+        .setGeminiRequest(
+            GeminiRequest.builder()
+                .setAction(GeminiRequest.Action.REQUEST_SCREEN_OVERVIEW)
+                .setRequestId(requestId)
+                .setFocusedNode(focusedNode)
+                .setImageBytes(screenshot)
+                .build());
+  }
+
+  public static Part.Builder geminiRequestImageQna(String text, byte[] imageBytes) {
+    return Part.builder()
+        .setGeminiRequest(
+            GeminiRequest.builder()
+                .setAction(GeminiRequest.Action.REQUEST_IMAGE_QNA)
+                .setText(text)
+                .setImageBytes(imageBytes)
+                .build());
+  }
+
+  public static Part.Builder geminiRequestScreenQna(String text, byte[] imageBytes) {
+    return Part.builder()
+        .setGeminiRequest(
+            GeminiRequest.builder()
+                .setAction(GeminiRequest.Action.REQUEST_SCREEN_QNA)
+                .setText(text)
+                .setImageBytes(imageBytes)
                 .build());
   }
 
@@ -711,6 +928,8 @@ public abstract class Feedback {
 
     public abstract @Nullable SystemAction systemAction();
 
+    public abstract @Nullable TouchLatency touchLatency();
+
     public abstract @Nullable NodeAction nodeAction();
 
     public abstract @Nullable WebAction webAction();
@@ -737,9 +956,13 @@ public abstract class Feedback {
 
     public abstract @Nullable Gesture gesture();
 
+    public abstract @Nullable Keyboard keyboard();
+
     public abstract @Nullable ImageCaption imageCaption();
 
     public abstract @Nullable ImageCaptionResult imageCaptionResult();
+
+    public abstract @Nullable ScreenOverviewResult screenOverviewResult();
 
     public abstract @Nullable DeviceInfo deviceInfo();
 
@@ -747,7 +970,11 @@ public abstract class Feedback {
 
     public abstract @Nullable UniversalSearch universalSearch();
 
+    public abstract @Nullable UpdateSpeechOverlayLayout updateSpeechOverlayLayout();
+
     public abstract @Nullable GeminiRequest geminiRequest();
+
+    public abstract @Nullable GeminiResultDialog geminiResultDialog();
 
     public abstract @Nullable ServiceFlag serviceFlag();
 
@@ -773,11 +1000,20 @@ public abstract class Feedback {
       // Convenience methods for Part
 
       public Builder speech(CharSequence text, @Nullable SpeakOptions options) {
-        return setSpeech(Speech.create(text, options));
+        return setSpeech(Speech.create(text, options, /* resultNotifier= */ null));
+      }
+
+      public Builder speechForSynthesis(
+          CharSequence text, LoadSpeechResultNotifier resultNotifier, SpeakOptions speakOptions) {
+        return setSpeech(Speech.create(text, speakOptions, resultNotifier));
       }
 
       public Builder sound(int resourceId) {
         return setSound(Sound.create(resourceId));
+      }
+
+      public Builder sound(int resourceId, boolean ignoreVolumeAdjustment) {
+        return setSound(Sound.create(resourceId, ignoreVolumeAdjustment));
       }
 
       public Builder vibration(int resourceId) {
@@ -827,6 +1063,8 @@ public abstract class Feedback {
 
       public abstract Builder setSystemAction(SystemAction systemAction);
 
+      public abstract Builder setTouchLatency(TouchLatency touchLatency);
+
       public abstract Builder setNodeAction(NodeAction nodeAction);
 
       public abstract Builder setWebAction(WebAction webAction);
@@ -853,9 +1091,13 @@ public abstract class Feedback {
 
       public abstract Builder setGesture(Gesture gesture);
 
+      public abstract Builder setKeyboard(Keyboard keyboard);
+
       public abstract Builder setImageCaption(ImageCaption imageCaption);
 
       public abstract Builder setImageCaptionResult(ImageCaptionResult imageCaptionResult);
+
+      public abstract Builder setScreenOverviewResult(ScreenOverviewResult screenOverviewResult);
 
       public abstract Builder setDeviceInfo(DeviceInfo deviceInfo);
 
@@ -863,7 +1105,12 @@ public abstract class Feedback {
 
       public abstract Builder setUniversalSearch(UniversalSearch universalSearch);
 
+      public abstract Builder setUpdateSpeechOverlayLayout(
+          UpdateSpeechOverlayLayout updateSpeechOverlayLayout);
+
       public abstract Builder setGeminiRequest(GeminiRequest geminiRequest);
+
+      public abstract Builder setGeminiResultDialog(GeminiResultDialog geminiResultDialog);
 
       public abstract Builder setServiceFlag(ServiceFlag serviceFlag);
 
@@ -905,8 +1152,10 @@ public abstract class Feedback {
               StringBuilderUtils.optionalSubObj("talkBackUI", talkBackUI()),
               StringBuilderUtils.optionalSubObj("showToast", showToast()),
               StringBuilderUtils.optionalSubObj("gesture", gesture()),
+              StringBuilderUtils.optionalSubObj("keyboard", keyboard()),
               StringBuilderUtils.optionalSubObj("imageCaption", imageCaption()),
               StringBuilderUtils.optionalSubObj("imageCaptionResult", imageCaptionResult()),
+              StringBuilderUtils.optionalSubObj("screenOverviewResult", screenOverviewResult()),
               StringBuilderUtils.optionalSubObj("deviceInfo", deviceInfo()),
               StringBuilderUtils.optionalSubObj("uiChange", uiChange()),
               StringBuilderUtils.optionalSubObj("speechRate", speechRate()),
@@ -915,8 +1164,11 @@ public abstract class Feedback {
               StringBuilderUtils.optionalSubObj("adjustVolume", adjustVolume()),
               StringBuilderUtils.optionalSubObj("universalSearch", universalSearch()),
               StringBuilderUtils.optionalSubObj("geminiRequest", geminiRequest()),
+              StringBuilderUtils.optionalSubObj("geminiResultDialog", geminiResultDialog()),
               StringBuilderUtils.optionalSubObj("serviceFlag", serviceFlag()),
-              StringBuilderUtils.optionalSubObj("brailleDisplay", brailleDisplay()));
+              StringBuilderUtils.optionalSubObj("brailleDisplay", brailleDisplay()),
+              StringBuilderUtils.optionalSubObj(
+                  "updateSpeechOverlayLayout", updateSpeechOverlayLayout()));
     }
   }
 
@@ -984,7 +1236,9 @@ public abstract class Feedback {
       COPY_SAVED,
       COPY_LAST,
       REPEAT_SAVED,
+      REPEAT_LAST,
       SPELL_SAVED,
+      SPELL_LAST,
       PAUSE_OR_RESUME,
       TOGGLE_VOICE_FEEDBACK,
       /**
@@ -994,12 +1248,18 @@ public abstract class Feedback {
       SILENCE,
       UNSILENCE,
       INVALIDATE_FREQUENT_CONTENT_CHANGE_CACHE,
+      SYNTHESIZE,
+      RESET_FORMATTING_HISTORY
     }
 
-    public static Speech create(CharSequence text, @Nullable SpeakOptions options) {
+    public static Speech create(
+        CharSequence text,
+        @Nullable SpeakOptions options,
+        @Nullable LoadSpeechResultNotifier resultNotifier) {
       return Speech.builder()
-          .setAction(Speech.Action.SPEAK)
+          .setAction(resultNotifier == null ? Speech.Action.SPEAK : Action.SYNTHESIZE)
           .setText(text)
+          .setSynthesizeStatusNotifier(resultNotifier)
           .setOptions(options)
           .build();
     }
@@ -1017,6 +1277,8 @@ public abstract class Feedback {
     public abstract @Nullable CharSequence hint();
 
     public abstract @Nullable SpeakOptions hintSpeakOptions();
+
+    public abstract @Nullable LoadSpeechResultNotifier synthesizeStatusNotifier();
 
     @InterruptGroup
     public abstract int hintInterruptGroup();
@@ -1049,6 +1311,9 @@ public abstract class Feedback {
 
       public abstract Builder setHintInterruptLevel(@InterruptLevel int hintInterruptLevel);
 
+      public abstract Builder setSynthesizeStatusNotifier(
+          @Nullable LoadSpeechResultNotifier statusNotifier);
+
       public abstract Speech build();
     }
 
@@ -1079,6 +1344,7 @@ public abstract class Feedback {
     /** Types of exclusive voice Recognition actions, mostly without additional feedback data. */
     public enum Action {
       START_LISTENING,
+      START_LISTENING_IF_SCREEN_NOT_LOCKED,
       STOP_LISTENING,
       SHOW_COMMAND_LIST;
     }
@@ -1087,12 +1353,16 @@ public abstract class Feedback {
 
     public abstract boolean checkDialog();
 
-    public static VoiceRecognition create(VoiceRecognition.Action action, boolean checkDialog) {
-      return new AutoValue_Feedback_VoiceRecognition(action, checkDialog);
+    public abstract String nodeMenuShortcut();
+
+    public static VoiceRecognition create(
+        VoiceRecognition.Action action, boolean checkDialog, String nodeMenuShortcut) {
+      return new AutoValue_Feedback_VoiceRecognition(action, checkDialog, nodeMenuShortcut);
     }
   }
 
   /** Inner data-structure for continuous-reading feedback. */
+  @AutoValue
   public abstract static class ContinuousRead {
     /** Types of exclusive continuous-reading actions. */
     public enum Action {
@@ -1115,15 +1385,32 @@ public abstract class Feedback {
   public abstract static class Sound {
 
     public static Sound create(int resourceId) {
-      return create(resourceId, /* rate= */ 1.0f, /* volume= */ 1.0f, NO_SEPARATION);
+      return create(
+          resourceId,
+          /* rate= */ 1.0f,
+          /* volume= */ 1.0f,
+          /* ignoreVolumeAdjustment= */ false,
+          NO_SEPARATION);
     }
 
     public static Sound create(int resourceId, float rate, float volume) {
-      return new AutoValue_Feedback_Sound(resourceId, rate, volume, NO_SEPARATION);
+      return new AutoValue_Feedback_Sound(
+          resourceId, rate, volume, /* ignoreVolumeAdjustment= */ false, NO_SEPARATION);
     }
 
-    public static Sound create(int resourceId, float rate, float volume, long separationMillisec) {
-      return new AutoValue_Feedback_Sound(resourceId, rate, volume, separationMillisec);
+    public static Sound create(int resourceId, boolean ignoreVolumeAdjustment) {
+      return new AutoValue_Feedback_Sound(
+          resourceId, /* rate= */ 1.0f, /* volume= */ 1.0f, ignoreVolumeAdjustment, NO_SEPARATION);
+    }
+
+    public static Sound create(
+        int resourceId,
+        float rate,
+        float volume,
+        boolean ignoreVolumeAdjustment,
+        long separationMillisec) {
+      return new AutoValue_Feedback_Sound(
+          resourceId, rate, volume, ignoreVolumeAdjustment, separationMillisec);
     }
 
     public abstract int resourceId();
@@ -1131,6 +1418,8 @@ public abstract class Feedback {
     public abstract float rate();
 
     public abstract float volume();
+
+    public abstract boolean ignoreVolumeAdjustment();
 
     public abstract long separationMillisec();
   }
@@ -1196,6 +1485,7 @@ public abstract class Feedback {
     /** Types of exclusive edit actions. */
     public enum Action {
       SELECT_ALL,
+      SELECT_SEGMENT,
       START_SELECT,
       END_SELECT,
       COPY,
@@ -1206,7 +1496,8 @@ public abstract class Feedback {
       CURSOR_TO_END, // Works with stopSelecting.
       INSERT, // Requires text.
       TYPO_CORRECTION, // Requires text and suggestion.
-      MOVE_CURSOR; // Requires cursor index.
+      MOVE_CURSOR, // Requires cursor index.
+      TOGGLE_VOICE_DICTATION;
     }
 
     public abstract AccessibilityNodeInfoCompat node();
@@ -1247,6 +1538,25 @@ public abstract class Feedback {
 
       public abstract EditText build();
     }
+  }
+
+  /** Inner data-structure for Touch Latency. */
+  @AutoValue
+  public abstract static class TouchLatency {
+
+    /** Types of adjusting focus latency actions, could be Focus/Typing-focus latency. */
+    public enum LatencyAction {
+      TOUCH_FOCUS_LATENCY_ACTION,
+      TYPING_FOCUS_LATENCY_ACTION
+    }
+
+    public static TouchLatency create(boolean increaseLatency, LatencyAction action) {
+      return new AutoValue_Feedback_TouchLatency(increaseLatency, action);
+    }
+
+    public abstract boolean increaseLatency();
+
+    public abstract LatencyAction action();
   }
 
   /** Inner data-structure for performing a global action. */
@@ -1354,13 +1664,15 @@ public abstract class Feedback {
   }
 
   /** Inner data-structure for scrolling feedback. */
+  @AutoValue
   public abstract static class Scroll {
 
     /** Types of exclusive scroll actions. */
     public enum Action {
       SCROLL,
       CANCEL_TIMEOUT,
-      ENSURE_ON_SCREEN
+      ENSURE_ON_SCREEN,
+      RESET_SCROLL_RECORDS,
     }
 
     public abstract Scroll.Action action();
@@ -1382,6 +1694,10 @@ public abstract class Feedback {
 
     public abstract int autoScrollAttempt();
 
+    public abstract @Nullable Bundle args();
+
+    public abstract @Nullable AutoScrollSuccessChecker autoScrollChecker();
+
     public static Scroll.Builder builder() {
       // By default, use timeout short.
       return new AutoValue_Feedback_Scroll.Builder()
@@ -1390,6 +1706,7 @@ public abstract class Feedback {
     }
 
     /** Builder for Scroll feedback data */
+    @AutoValue.Builder
     public abstract static class Builder {
       public abstract Scroll.Builder setAction(Scroll.Action action);
 
@@ -1410,6 +1727,11 @@ public abstract class Feedback {
       public abstract Scroll.Builder setTimeout(ScrollTimeout timeout);
 
       public abstract Scroll.Builder setAutoScrollAttempt(int autoScrollAttempt);
+
+      public abstract Scroll.Builder setArgs(@Nullable Bundle args);
+
+      public abstract Scroll.Builder setAutoScrollChecker(
+          @Nullable AutoScrollSuccessChecker autoScrollSuccessChecker);
 
       public abstract Scroll build();
     }
@@ -1436,15 +1758,18 @@ public abstract class Feedback {
       INITIAL_FOCUS_FIRST_CONTENT,
       FOCUS_FOR_TOUCH,
       CLICK_NODE,
+      DOUBLE_CLICK_NODE,
       LONG_CLICK_NODE,
       CLICK_CURRENT,
+      DOUBLE_CLICK_CURRENT,
       LONG_CLICK_CURRENT,
       CLICK_ANCESTOR,
       SEARCH_FROM_TOP, // Requires searchKeyword.
       SEARCH_AGAIN,
       ENSURE_ACCESSIBILITY_FOCUS_ON_SCREEN,
       RENEW_ENSURE_FOCUS,
-      STEAL_NEXT_WINDOW_NAVIGATION;
+      STEAL_NEXT_WINDOW_NAVIGATION,
+      READ_NODE_LINK_URL;
     }
 
     public abstract @Nullable AccessibilityNodeInfoCompat start();
@@ -1523,6 +1848,7 @@ public abstract class Feedback {
   }
 
   /** Inner data-structure for pass-through. */
+  @AutoValue
   public abstract static class PassThroughMode {
 
     /** Types of pass-through actions. */
@@ -1619,6 +1945,7 @@ public abstract class Feedback {
   }
 
   /** Inner data-structure for adjust volume. */
+  @AutoValue
   public abstract static class AdjustVolume {
 
     /**
@@ -1649,6 +1976,7 @@ public abstract class Feedback {
   // Focus directional navigation feedback
 
   /** Inner data-structure for focus directional navigation. */
+  @AutoValue
   public abstract static class FocusDirection {
 
     /** Types of exclusive focus-direction actions, mostly without additional feedback data. */
@@ -1677,6 +2005,9 @@ public abstract class Feedback {
     @TargetType
     public abstract int htmlTargetType();
 
+    @TargetType
+    public abstract int tableTargetType();
+
     public abstract @Nullable AccessibilityNodeInfoCompat targetNode();
 
     public abstract boolean defaultToInputFocus();
@@ -1694,6 +2025,8 @@ public abstract class Feedback {
 
     public abstract @Nullable CursorGranularity granularity();
 
+    public abstract boolean skipEdgeCheck();
+
     public abstract boolean fromUser();
 
     public abstract FocusDirection.Action action();
@@ -1702,25 +2035,34 @@ public abstract class Feedback {
       return (htmlTargetType() != TARGET_DEFAULT);
     }
 
+    public boolean hasTableTargetType() {
+      return (tableTargetType() != TARGET_DEFAULT);
+    }
+
     public static Builder builder() {
       return new AutoValue_Feedback_FocusDirection.Builder()
           // Set default values that are not null.
           .setDirection(SEARCH_FOCUS_UNKNOWN)
           .setHtmlTargetType(TARGET_DEFAULT)
+          .setTableTargetType(TARGET_DEFAULT)
           .setDefaultToInputFocus(false)
           .setScroll(false)
           .setWrap(false)
           .setToContainer(false)
           .setToWindow(false)
           .setInputMode(INPUT_MODE_UNKNOWN)
+          .setSkipEdgeCheck(false)
           .setFromUser(false);
     }
 
     /** Builder for FocusDirection feedback data */
+    @AutoValue.Builder
     public abstract static class Builder {
       public abstract Builder setDirection(@SearchDirectionOrUnknown int direction);
 
       public abstract Builder setHtmlTargetType(@TargetType int htmlTargetType);
+
+      public abstract Builder setTableTargetType(@TargetType int tableTargetType);
 
       /**
        * This node can be used at {@link FocusDirection.Action} FOLLOW, SELECTION_MODE_ON and
@@ -1742,6 +2084,8 @@ public abstract class Feedback {
 
       public abstract Builder setGranularity(@Nullable CursorGranularity granularity);
 
+      public abstract Builder setSkipEdgeCheck(boolean skipEdgeCheck);
+
       public abstract Builder setFromUser(boolean fromUser);
 
       public abstract Builder setAction(FocusDirection.Action action);
@@ -1755,6 +2099,7 @@ public abstract class Feedback {
           StringBuilderUtils.optionalField("action", action()),
           StringBuilderUtils.optionalInt("direction", direction(), SEARCH_FOCUS_UNKNOWN),
           StringBuilderUtils.optionalInt("htmlTargetType", htmlTargetType(), TARGET_DEFAULT),
+          StringBuilderUtils.optionalInt("tableTargetType", tableTargetType(), TARGET_DEFAULT),
           StringBuilderUtils.optionalSubObj("targetNode", toStringShort(targetNode())),
           StringBuilderUtils.optionalTag("defaultToInputFocus", defaultToInputFocus()),
           StringBuilderUtils.optionalTag("scroll", scroll()),
@@ -1763,6 +2108,7 @@ public abstract class Feedback {
           StringBuilderUtils.optionalTag("toWindow", toWindow()),
           StringBuilderUtils.optionalInt("inputMode", inputMode(), INPUT_MODE_UNKNOWN),
           StringBuilderUtils.optionalField("granularity", granularity()),
+          StringBuilderUtils.optionalTag("skipEdgeCheck", skipEdgeCheck()),
           StringBuilderUtils.optionalTag("fromUser", fromUser()));
     }
   }
@@ -1774,10 +2120,22 @@ public abstract class Feedback {
     /** Types of exclusive UI actions. */
     public enum Action {
       SHOW_SELECTOR_UI,
-      SHOW_GESTURE_ACTION_UI,
+      SHOW_GESTURE_OR_KEYBOARD_ACTION_UI,
       HIDE,
       SUPPORT,
       NOT_SUPPORT
+    }
+
+    /**
+     * The action item triggering TalkBack UI. It could be used as a decision whether we need to
+     * customize UI for some specific action items.
+     */
+    public enum Item {
+      ITEM_UNSPECIFIED,
+      ITEM_ACCESSIBILITY_VOLUME_INCREASE,
+      ITEM_ACCESSIBILITY_VOLUME_DECREASE,
+      ITEM_ACCESSIBILITY_VOLUME_MAXIMUM,
+      ITEM_ACCESSIBILITY_VOLUME_MINIMUM
     }
 
     public abstract TalkBackUI.Action action();
@@ -1788,12 +2146,24 @@ public abstract class Feedback {
 
     public abstract boolean showIcon();
 
+    public abstract TalkBackUI.Item item();
+
     public static TalkBackUI create(
         TalkBackUI.Action action,
         TalkBackUIActor.Type type,
         CharSequence message,
         boolean showIcon) {
-      return new AutoValue_Feedback_TalkBackUI(action, type, message, showIcon);
+      return new AutoValue_Feedback_TalkBackUI(
+          action, type, message, showIcon, TalkBackUI.Item.ITEM_UNSPECIFIED);
+    }
+
+    public static TalkBackUI create(
+        TalkBackUI.Action action,
+        TalkBackUIActor.Type type,
+        CharSequence message,
+        boolean showIcon,
+        TalkBackUI.Item item) {
+      return new AutoValue_Feedback_TalkBackUI(action, type, message, showIcon, item);
     }
   }
 
@@ -1841,6 +2211,22 @@ public abstract class Feedback {
     }
   }
 
+  /** Inner data-structure for Keyboard. */
+  @AutoValue
+  public abstract static class Keyboard {
+
+    /** Types of exclusive keyboard actions. */
+    public enum Action {
+      SHOW_KEYBOARD_SHORTCUTS_DIALOG,
+    }
+
+    public abstract Keyboard.Action action();
+
+    public static Keyboard create(Keyboard.Action action) {
+      return new AutoValue_Feedback_Keyboard(action);
+    }
+  }
+
   /** Inner data-structure for image caption. */
   @AutoValue
   public abstract static class ImageCaption {
@@ -1853,10 +2239,11 @@ public abstract class Feedback {
       INITIALIZE_ICON_DETECTION,
       INITIALIZE_IMAGE_DESCRIPTION,
       PERFORM_CAPTION_WITH_GEMINI,
-      DETAILED_DESCRIPTION_OPT_IN,
+      ONLINE_GEMINI_FEATURE_OPT_IN,
       PERFORM_CAPTION_WITH_ON_DEVICE_GEMINI,
       ON_DEVICE_DETAILED_DESCRIPTION_OPT_IN,
       CONFIG_DETAILED_IMAGE_DESCRIPTIONS_SETTINGS,
+      PERFORM_SCREEN_OVERVIEW,
     }
 
     public abstract ImageCaption.Action action();
@@ -1866,8 +2253,12 @@ public abstract class Feedback {
     /** Return true, if the image-caption triggers by users. */
     public abstract boolean userRequested();
 
+    public abstract @GeminiFeatureType int featureType();
+
     public static Builder builder() {
-      return new AutoValue_Feedback_ImageCaption.Builder().setUserRequested(false);
+      return new AutoValue_Feedback_ImageCaption.Builder()
+          .setUserRequested(false)
+          .setFeatureType(GEMINI_DESCRIBE_IMAGE);
     }
 
     /** Builder for ImageCaption feedback data. */
@@ -1879,6 +2270,8 @@ public abstract class Feedback {
       public abstract Builder setTarget(@Nullable AccessibilityNodeInfoCompat target);
 
       public abstract Builder setUserRequested(boolean isUserRequested);
+
+      public abstract Builder setFeatureType(@GeminiFeatureType int featureType);
 
       public abstract ImageCaption build();
     }
@@ -1898,6 +2291,14 @@ public abstract class Feedback {
     /** Return {@code true}, if the image-caption triggers by users. */
     public abstract boolean userRequested();
 
+    /** Returns the {@link FinishReason} for the Gemini request. */
+    @Nullable
+    public abstract FinishReason finishReason();
+
+    /** Returns the {@link ErrorReason} for the Gemini request. */
+    @Nullable
+    public abstract ErrorReason errorReason();
+
     public static ImageCaptionResult.Builder builder() {
       return new AutoValue_Feedback_ImageCaptionResult.Builder();
     }
@@ -1914,11 +2315,39 @@ public abstract class Feedback {
 
       public abstract Builder setUserRequested(boolean isUserRequested);
 
+      public abstract Builder setFinishReason(FinishReason finishReason);
+
+      public abstract Builder setErrorReason(ErrorReason errorReason);
+
       public abstract ImageCaptionResult build();
     }
   }
 
+  /** Inner data-structure for screen overview result. */
+  @AutoValue
+  public abstract static class ScreenOverviewResult {
+    public abstract int requestId();
+
+    public abstract OverviewResponse response();
+
+    public static ScreenOverviewResult.Builder builder() {
+      return new AutoValue_Feedback_ScreenOverviewResult.Builder();
+    }
+
+    /** Builder for ScreenOverviewResult feedback data. */
+    @AutoValue.Builder
+    public abstract static class Builder {
+
+      public abstract Builder setRequestId(int id);
+
+      public abstract Builder setResponse(OverviewResponse response);
+
+      public abstract ScreenOverviewResult build();
+    }
+  }
+
   /** Inner data-structure for controlling device info. */
+  @AutoValue
   public abstract static class DeviceInfo {
 
     /** Types of exclusive actions of device info. */
@@ -1964,7 +2393,12 @@ public abstract class Feedback {
       TOGGLE_SEARCH,
       CANCEL_SEARCH,
       HANDLE_SCREEN_STATE,
-      RENEW_OVERLAY
+      RENEW_OVERLAY,
+      SHOW_HEADING_LIST,
+      SHOW_LANDMARK_LIST,
+      SHOW_LINK_LIST,
+      SHOW_CONTROL_LIST,
+      SHOW_TABLE_LIST,
     }
 
     public abstract Action action();
@@ -1987,6 +2421,14 @@ public abstract class Feedback {
     }
   }
 
+  /** Inner data-structure for updating the TextToSpeech overlay. */
+  @AutoValue
+  public abstract static class UpdateSpeechOverlayLayout {
+    public static UpdateSpeechOverlayLayout create() {
+      return new AutoValue_Feedback_UpdateSpeechOverlayLayout();
+    }
+  }
+
   /** Inner data-structure for Gemini requests. */
   @AutoValue
   public abstract static class GeminiRequest {
@@ -1994,22 +2436,38 @@ public abstract class Feedback {
     /** Types of exclusive GeminiRequest actions. */
     public enum Action {
       REQUEST,
-      REQUEST_ON_DEVICE_IMAGE_CAPTIONING
+      REQUEST_ON_DEVICE_IMAGE_CAPTIONING,
+      MUTE_GEMINI_SOUND,
+      REQUEST_SCREEN_OVERVIEW,
+      REQUEST_IMAGE_QNA,
+      REQUEST_SCREEN_QNA,
+      DISMISS_BOTTOM_SHEET,
     }
 
     public abstract Action action();
 
     public abstract int requestId();
 
-    @Nullable
-    public abstract String text();
+    public abstract @Nullable AccessibilityNodeInfoCompat focusedNode();
 
-    public abstract Bitmap image();
+    public abstract @Nullable AccessibilityTree a11yTree();
+
+    public abstract @Nullable String text();
+
+    public abstract @Nullable Bitmap image();
+
+    public abstract byte[] imageBytes();
 
     public abstract boolean manualTrigger();
 
+    @Nullable
+    public abstract List<ChatHistoryItem> chatHistory();
+
     public static GeminiRequest.Builder builder() {
-      return new AutoValue_Feedback_GeminiRequest.Builder().setRequestId(-1).setManualTrigger(true);
+      return new AutoValue_Feedback_GeminiRequest.Builder()
+          .setRequestId(-1)
+          .setImageBytes(new byte[0])
+          .setManualTrigger(true);
     }
 
     /** Builder for GeminiRequest feedback data. */
@@ -2020,13 +2478,71 @@ public abstract class Feedback {
 
       public abstract Builder setRequestId(int requestId);
 
+      public abstract Builder setFocusedNode(AccessibilityNodeInfoCompat focusedNode);
+
+      public abstract Builder setA11yTree(AccessibilityTree a11yTree);
+
       public abstract Builder setText(String text);
 
       public abstract Builder setImage(Bitmap image);
 
+      public abstract Builder setImageBytes(byte[] imageBytes);
+
       public abstract Builder setManualTrigger(boolean manualTrigger);
 
+      public abstract Builder setChatHistory(List<ChatHistoryItem> chatHistory);
+
       public abstract GeminiRequest build();
+    }
+  }
+
+  /** Inner data-structure for requesting dialog for Gemini result. */
+  @AutoValue
+  public abstract static class GeminiResultDialog {
+
+    /** Types of data for the dialog. */
+    public enum Action {
+      IMAGE_CAPTION_RESULT,
+    }
+
+    public abstract Action action();
+
+    public abstract int requestId();
+
+    @Nullable
+    public abstract Result imageDescriptionResult();
+
+    @Nullable
+    public abstract Result iconLabelResult();
+
+    @Nullable
+    public abstract Result ocrTextResult();
+
+    public abstract boolean isScreenDescription();
+
+    public static GeminiResultDialog.Builder builder() {
+      return new AutoValue_Feedback_GeminiResultDialog.Builder();
+    }
+
+    /** Builder for BottomSheetResult feedback data. */
+    @AutoValue.Builder
+    public abstract static class Builder {
+
+      public abstract GeminiResultDialog.Builder setAction(GeminiResultDialog.Action action);
+
+      public abstract GeminiResultDialog.Builder setRequestId(int requestId);
+
+      public abstract GeminiResultDialog.Builder setImageDescriptionResult(
+          Result imageDescriptionResult);
+
+      public abstract GeminiResultDialog.Builder setIconLabelResult(Result iconLabelResult);
+
+      public abstract GeminiResultDialog.Builder setOcrTextResult(Result ocrTextResult);
+
+      public abstract GeminiResultDialog.Builder setIsScreenDescription(
+          boolean isScreenDescription);
+
+      public abstract GeminiResultDialog build();
     }
   }
 
@@ -2056,6 +2572,8 @@ public abstract class Feedback {
     /** Types of action to performed by braille display. */
     public enum Action {
       TOGGLE_BRAILLE_DISPLAY_ON_OR_OFF,
+      TOGGLE_BRAILLE_CONTRACTED_MODE,
+      TOGGLE_BRAILLE_ON_SCREEN_OVERLAY,
     }
 
     public abstract BrailleDisplay.Action action();
@@ -2066,13 +2584,10 @@ public abstract class Feedback {
   }
 
   static String groupIdToString(int groupId) {
-    switch (groupId) {
-      case HINT:
-        return "HINT";
-      case GESTURE_VIBRATION:
-        return "GESTURE_VIBRATION";
-      default:
-        return "(unknown)";
-    }
+    return switch (groupId) {
+      case HINT -> "HINT";
+      case GESTURE_VIBRATION -> "GESTURE_VIBRATION";
+      default -> "(unknown)";
+    };
   }
 }

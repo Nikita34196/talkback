@@ -16,7 +16,10 @@
 
 package com.google.android.accessibility.talkback.utils;
 
+import android.content.Context;
 import android.os.Build;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
+import com.google.android.accessibility.utils.FeatureSupport;
 import com.google.android.accessibility.utils.FormFactorUtils;
 
 /** Methods to check whether to support talkback features. */
@@ -25,12 +28,12 @@ public class TalkbackFeatureSupport {
 
   /** Returns {@code true} if devices support text suggestion feature. */
   public static boolean supportTextSuggestion() {
-    return !FormFactorUtils.getInstance().isAndroidWear();
+    return !FormFactorUtils.isAndroidWear();
   }
 
   /** Returns {@code true} if devices support speech recognize feature. */
   public static boolean supportSpeechRecognize() {
-    return !FormFactorUtils.getInstance().isAndroidWear();
+    return !FormFactorUtils.isAndroidWear();
   }
 
   /**
@@ -39,12 +42,13 @@ public class TalkbackFeatureSupport {
    * <p>Note: TalkBack dynamic features are icon description and image description that need the
    * device downloads libraries dynamically.
    *
-   * <p>Note: TalkBack would not support dynamic features on x86, ATV, auto and wear platform.
+   * <p>Note: TalkBack would not support dynamic features on x86, ATV, auto, wear, and XR platform.
    */
   public static boolean supportDynamicFeatures() {
-    if (FormFactorUtils.getInstance().isAndroidTv()
-        || FormFactorUtils.getInstance().isAndroidAuto()
-        || FormFactorUtils.getInstance().isAndroidWear()) {
+    if (FormFactorUtils.isAndroidTv()
+        || FormFactorUtils.isAndroidAuto()
+        || FormFactorUtils.isAndroidWear()
+        || FormFactorUtils.isAndroidXr()) {
       return false;
     }
     for (String abs : Build.SUPPORTED_32_BIT_ABIS) {
@@ -61,6 +65,22 @@ public class TalkbackFeatureSupport {
   }
 
   public static boolean supportMultipleAutoScroll() {
-    return FormFactorUtils.getInstance().isAndroidWear();
+    return FormFactorUtils.isAndroidWear();
+  }
+
+  public static boolean skipURLSpanClick() {
+    // TODO: Enable the click for URLSpan after the solution of security long-term fix
+    //  for background remote intent has been landed.
+    return FormFactorUtils.isAndroidWear();
+  }
+
+  public static boolean supportTalkBackExitBanner(Context context) {
+    if (FormFactorUtils.isAndroidWear()
+        || FormFactorUtils.isAndroidTv()
+        || FormFactorUtils.isAndroidAuto()
+        || FormFactorUtils.isAndroidXr()) {
+      return false;
+    }
+    return FeatureFlagReader.showExitWatermark(context) && FeatureSupport.supportGestureDetection();
   }
 }

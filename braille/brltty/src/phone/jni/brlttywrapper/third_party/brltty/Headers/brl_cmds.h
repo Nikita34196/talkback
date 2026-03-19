@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -93,7 +93,7 @@ typedef enum {
   BRL_CMD_NXPROMPT /* go down to next command prompt */,
   BRL_CMD_PRSEARCH /* search backward for clipboard text */,
   BRL_CMD_NXSEARCH /* search forward for clipboard text */,
-
+  
   /* horizontal motion */
   BRL_CMD_CHRLT /* go left one character */,
   BRL_CMD_CHRRT /* go right one character */,
@@ -105,12 +105,12 @@ typedef enum {
   BRL_CMD_FWINRTSKIP /* go forward skipping blank braille windows */,
   BRL_CMD_LNBEG /* go to beginning of line */,
   BRL_CMD_LNEND /* go to end of line */,
-
+  
   /* implicit motion */
   BRL_CMD_HOME /* go to screen cursor */,
   BRL_CMD_BACK /* go back after cursor tracking */,
   BRL_CMD_RETURN /* go to screen cursor or go back after cursor tracking */,
-
+  
   /* feature activation and deactivation */
   BRL_CMD_FREEZE /* set screen image frozen/unfrozen */,
   BRL_CMD_DISPMD /* set display mode attributes/text */,
@@ -129,17 +129,17 @@ typedef enum {
   BRL_CMD_TUNES /* set alert tunes on/off */,
   BRL_CMD_AUTOREPEAT /* set autorepeat on/off */,
   BRL_CMD_AUTOSPEAK /* set autospeak on/off */,
-
+ 
   /* mode selection */
   BRL_CMD_HELP /* enter/leave help display */,
   BRL_CMD_INFO /* enter/leave status display */,
   BRL_CMD_LEARN /* enter/leave command learn mode */,
-
+  
   /* preference setting */
   BRL_CMD_PREFMENU /* enter/leave preferences menu */,
   BRL_CMD_PREFSAVE /* save preferences to disk */,
   BRL_CMD_PREFLOAD /* restore preferences from disk */,
-
+  
   /* menu navigation */
   BRL_CMD_MENU_FIRST_ITEM /* go up to first item */,
   BRL_CMD_MENU_LAST_ITEM /* go down to last item */,
@@ -147,7 +147,7 @@ typedef enum {
   BRL_CMD_MENU_NEXT_ITEM /* go down to next item */,
   BRL_CMD_MENU_PREV_SETTING /* select previous choice */,
   BRL_CMD_MENU_NEXT_SETTING /* select next choice */,
-
+ 
   /* speech controls */
   BRL_CMD_MUTE /* stop speaking */,
   BRL_CMD_SPKHOME /* go to current speaking position */,
@@ -158,11 +158,11 @@ typedef enum {
   BRL_CMD_SAY_FASTER /* increase speaking rate */,
   BRL_CMD_SAY_SOFTER /* decrease speaking volume */,
   BRL_CMD_SAY_LOUDER /* increase speaking volume */,
-
+  
   /* virtual terminal switching */
   BRL_CMD_SWITCHVT_PREV /* switch to the previous virtual terminal */,
   BRL_CMD_SWITCHVT_NEXT /* switch to the next virtual terminal */,
-
+  
   /* miscellaneous */
   BRL_CMD_CSRJMP_VERT /* bring screen cursor to current line */,
   BRL_CMD_PASTE /* insert clipboard text after screen cursor */,
@@ -174,9 +174,7 @@ typedef enum {
   BRL_CMD_SHIFT /* cycle the Shift sticky input modifier (next, on, off) */,
   BRL_CMD_UPPER /* cycle the Upper sticky input modifier (next, on, off) */,
   BRL_CMD_CONTROL /* cycle the Control sticky input modifier (next, on, off) */,
-  BRL_CMD_META /* cycle the Meta (Left Alt) sticky input modifier (next, on,
-                  off) */
-  ,
+  BRL_CMD_META /* cycle the Meta (Left Alt) sticky input modifier (next, on, off) */,
 
   BRL_CMD_TIME /* show current date and time */,
   BRL_CMD_MENU_PREV_LEVEL /* go to previous menu level */,
@@ -197,11 +195,8 @@ typedef enum {
   BRL_CMD_SPEAK_CURR_LINE /* speak current line */,
   BRL_CMD_SPEAK_PREV_LINE /* go to and speak previous line */,
   BRL_CMD_SPEAK_NEXT_LINE /* go to and speak next line */,
-  BRL_CMD_SPEAK_FRST_CHAR /* go to and speak first non-blank character on line
-                           */
-  ,
-  BRL_CMD_SPEAK_LAST_CHAR /* go to and speak last non-blank character on line */
-  ,
+  BRL_CMD_SPEAK_FRST_CHAR /* go to and speak first non-blank character on line */,
+  BRL_CMD_SPEAK_LAST_CHAR /* go to and speak last non-blank character on line */,
   BRL_CMD_SPEAK_FRST_LINE /* go to and speak first non-blank line on screen */,
   BRL_CMD_SPEAK_LAST_LINE /* go to and speak last non-blank line on screen */,
   BRL_CMD_DESC_CURR_CHAR /* describe current character */,
@@ -217,12 +212,8 @@ typedef enum {
   BRL_CMD_BRLKBD /* set braille keyboard enabled/disabled */,
 
   BRL_CMD_UNSTICK /* clear all sticky input modifiers */,
-  BRL_CMD_ALTGR /* cycle the AltGr (Right Alt) sticky input modifier (next, on,
-                   off) */
-  ,
-  BRL_CMD_GUI /* cycle the GUI (Windows) sticky input modifier (next, on, off)
-               */
-  ,
+  BRL_CMD_ALTGR /* cycle the AltGr (Right Alt) sticky input modifier (next, on, off) */,
+  BRL_CMD_GUI /* cycle the GUI (Windows) sticky input modifier (next, on, off) */,
 
   BRL_CMD_BRL_STOP /* stop the braille driver */,
   BRL_CMD_BRL_START /* start the braille driver */,
@@ -273,11 +264,12 @@ typedef enum {
   BRL_CMD_SAY_LOWER /* decrease speaking pitch */,
   BRL_CMD_SAY_HIGHER /* increase speaking pitch */,
   BRL_CMD_SAY_ALL /* speak from top of screen through bottom of screen */,
-
+  
   BRL_CMD_CONTRACTED /* set contracted/computer braille */,
   BRL_CMD_COMPBRL6 /* set six/eight dot computer braille */,
 
   BRL_CMD_PREFRESET /* reset preferences to defaults */,
+  BRL_CMD_ASPK_EMP_LINE /* set autospeak empty line on/off */,
 
   BRL_basicCommandCount /* must be last */
 } BRL_BasicCommand;
@@ -295,8 +287,7 @@ typedef enum {
   BRL_BLK_COPY_LINE /* linear copy to character */,
   BRL_BLK_SWITCHVT /* switch to specific virtual terminal */,
   BRL_BLK_PRINDENT /* go up to nearest line with less indent than character */,
-  BRL_BLK_NXINDENT /* go down to nearest line with less indent than character */
-  ,
+  BRL_BLK_NXINDENT /* go down to nearest line with less indent than character */,
   BRL_BLK_DESCCHAR /* describe character */,
   BRL_BLK_SETLEFT /* place left end of braille window at character */,
   BRL_BLK_SETMARK /* remember current braille window position */,
@@ -306,8 +297,7 @@ typedef enum {
   BRL_BLK_NXDIFCHAR /* go down to nearest line with different character */,
   BRL_BLK_CLIP_COPY /* copy characters to clipboard */,
   BRL_BLK_CLIP_APPEND /* append characters to clipboard */,
-  BRL_BLK_PASTE_HISTORY /* insert clipboard history entry after screen cursor */
-  ,
+  BRL_BLK_PASTE_HISTORY /* insert clipboard history entry after screen cursor */,
   BRL_BLK_SET_TEXT_TABLE /* set text table */,
   BRL_BLK_SET_ATTRIBUTES_TABLE /* set attributes table */,
   BRL_BLK_SET_CONTRACTION_TABLE /* set contraction table */,
@@ -367,13 +357,14 @@ typedef enum {
 #define BRL_FLG_MOTION_SCALED 0X080000 /* scale arg=0X00-0XFF to screen height */
 #define BRL_FLG_MOTION_TOLEFT 0X100000 /* go to beginning of line */
 
-#define BRL_FLG_INPUT_SHIFT   0X010000 /* shift key pressed */
-#define BRL_FLG_INPUT_UPPER   0X020000 /* convert to uppercase */
-#define BRL_FLG_INPUT_CONTROL 0X040000 /* control key pressed */
-#define BRL_FLG_INPUT_META    0X080000 /* meta (left alt) key pressed */
-#define BRL_FLG_INPUT_ALTGR   0X100000 /* altgr (right alt) key pressed */
-#define BRL_FLG_INPUT_GUI     0X200000 /* gui (windows) key pressed */
-#define BRL_FLG_INPUT_ESCAPED 0X400000 /* prefix with escape */
+#define BRL_FLG_INPUT_SHIFT    0X010000 /* shift key pressed */
+#define BRL_FLG_INPUT_UPPER    0X020000 /* convert to uppercase */
+#define BRL_FLG_INPUT_CONTROL  0X040000 /* control key pressed */
+#define BRL_FLG_INPUT_META     0X080000 /* meta (left alt) key pressed */
+#define BRL_FLG_INPUT_ALTGR    0X100000 /* altgr (right alt) key pressed */
+#define BRL_FLG_INPUT_GUI      0X200000 /* gui (windows) key pressed */
+#define BRL_FLG_INPUT_ESCAPED  0X400000 /* prefix with escape */
+#define BRL_FLG_INPUT_CAPSLOCK 0X800000 /* capslock key pressed */
 
 #define BRL_FLG_KBD_RELEASE 0X010000 /* it is a release scan code */
 #define BRL_FLG_KBD_EMUL0   0X020000 /* it is an emulation 0 scan code */

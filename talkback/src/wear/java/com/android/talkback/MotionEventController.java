@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2024 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
 package com.google.android.accessibility.talkback;
 
 import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED;
@@ -21,7 +37,6 @@ import static com.google.android.accessibility.utils.traversal.TraversalStrategy
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.annotation.TargetApi;
 import android.os.Build.VERSION_CODES;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -31,8 +46,10 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 import androidx.annotation.WorkerThread;
 import androidx.core.view.ViewConfigurationCompat;
@@ -42,6 +59,7 @@ import com.google.android.accessibility.utils.AccessibilityEventListener;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
 import com.google.android.accessibility.utils.DisplayUtils;
 import com.google.android.accessibility.utils.Filter;
+import com.google.android.accessibility.utils.Logger;
 import com.google.android.accessibility.utils.Performance;
 import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.Role;
@@ -49,6 +67,7 @@ import com.google.android.accessibility.utils.Role.RoleName;
 import com.google.android.accessibility.utils.WeakReferenceHandler;
 import com.google.android.accessibility.utils.output.FeedbackController;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
+import java.time.Duration;
 
 /**
  * A controller to decide whether to intercept rotary encoder events and handle it if needed.
@@ -56,7 +75,7 @@ import com.google.android.libraries.accessibility.utils.log.LogUtils;
  * <p>The methods annotated as {@code @WorkerThread} should be run in the {@link
  * MotionEventController#backgroundHandler}.
  */
-@TargetApi(VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(VERSION_CODES.UPSIDE_DOWN_CAKE)
 public class MotionEventController implements AccessibilityEventListener {
 
   private static final String TAG = "MotionEventController";
@@ -81,6 +100,14 @@ public class MotionEventController implements AccessibilityEventListener {
 
   private final MotionEventHandler backgroundHandler;
   private final Handler mainHandler = new Handler(Looper.getMainLooper());
+  private final Runnable disableInterceptRotaryEncoderRunnable =
+      () -> interceptRotaryEncoderInternal(/* shouldHandleMotionEvent= */ false);
+  private final Runnable recheckInterceptRotaryEncoderRunnable =
+      () -> {
+        LogUtils.v(TAG, "Recheck whether we should intercept rotary encoder again");
+        interceptRotaryEncoderIfNeeded();
+      };
+  private static final Duration RECHECK_DELAY_DURATION = Duration.ofSeconds(1);
 
   private boolean isHandlingMotionEvent;
 
@@ -90,7 +117,14 @@ public class MotionEventController implements AccessibilityEventListener {
   // Besides, we will make sure that the currentScrollableNodeForFocus is the descendant of the
   // currentFocusedNodeInScrollable.
   private AccessibilityNodeInfoCompat currentScrollableNodeForFocus;
+  private boolean isReachToEdgeScrolledEvent = false;
   private AccessibilityNodeInfoCompat currentFocusedNodeInScrollable;
+  // We should intercept RSB for the out of scrollable a11y focused node when the input-focused node
+  // is a scrollable node.
+  private boolean isInterceptForNodeOutOfScrollableNode;
+  // These 2 variables are used for dump logger.
+  private boolean useForLogIsFocusedNodeOutOfScrollableContainer;
+  private AccessibilityNodeInfoCompat inputFocusedNode;
 
   public MotionEventController(
       AccessibilityService service,
@@ -203,8 +237,9 @@ public class MotionEventController implements AccessibilityEventListener {
             // fallback to original scrolling. It is helpful to avoid missing animation like the
             // dismiss of quick settings and notification tray by scrolling RSB.
             LogUtils.v(TAG, "performActionIfNeeded: returnFeedback failed");
-            backgroundHandler.post(
-                () -> interceptRotaryEncoderInternal(/* shouldHandleMotionEvent= */ false));
+            backgroundHandler.post(disableInterceptRotaryEncoderRunnable);
+            backgroundHandler.postDelayed(
+                recheckInterceptRotaryEncoderRunnable, RECHECK_DELAY_DURATION.toMillis());
           }
         });
   }
@@ -214,30 +249,26 @@ public class MotionEventController implements AccessibilityEventListener {
     LogUtils.v(TAG, "updateCurrentNodes on event: " + event);
     int eventType = event.getEventType();
     switch (eventType) {
-      case TYPE_VIEW_ACCESSIBILITY_FOCUSED:
-        updateFocusedNode(event);
-        break;
-      case TYPE_VIEW_SCROLLED:
-        updateScrollableNode(event);
-        break;
-      case TYPE_WINDOWS_CHANGED:
+      case TYPE_VIEW_ACCESSIBILITY_FOCUSED -> updateFocusedNode(event);
+      case TYPE_VIEW_SCROLLED -> updateScrollableNode(event);
+      case TYPE_WINDOWS_CHANGED -> {
         if ((event.getWindowChanges() & TYPE_WINDOWS_CHANGE_FOR_RESET) != 0) {
           resetCurrentNodes();
         }
-        break;
-      case TYPE_WINDOW_STATE_CHANGED:
+      }
+      case TYPE_WINDOW_STATE_CHANGED -> {
         if ((event.getContentChangeTypes() & TYPE_WINDOW_STATE_CHANGE_FOR_RESET) != 0) {
           resetCurrentNodes();
         }
-        break;
-      default:
-        LogUtils.w(TAG, "updateCurrentNodes: Shouldn't process this event. (event=%s)", event);
+      }
+      default ->
+          LogUtils.w(TAG, "updateCurrentNodes: Shouldn't process this event. (event=%s)", event);
     }
   }
 
   private void resetCurrentNodes() {
     currentScrollableNodeForFocus = null;
-    currentFocusedNodeInScrollable = null;
+    clearCurrentFocusedNodeInScrollable();
     axisSum = 0;
   }
 
@@ -245,25 +276,82 @@ public class MotionEventController implements AccessibilityEventListener {
     AccessibilityNodeInfoCompat focusedNode =
         AccessibilityNodeInfoUtils.toCompat(event.getSource());
 
-    AccessibilityNodeInfoCompat scrollableContainerNode = getScrollableRoleContainer(focusedNode);
-    boolean focusedNodeInScrollableContainer = scrollableContainerNode != null;
+    AccessibilityNodeInfoCompat focusedNodeContainer = getScrollableRoleContainer(focusedNode);
+    boolean focusedNodeInScrollableContainer = focusedNodeContainer != null;
+
+    isInterceptForNodeOutOfScrollableNode =
+        shouldInterceptForNodeOutOfScrollableNode(focusedNode, focusedNodeContainer);
 
     if (focusedNodeInScrollableContainer) {
       currentFocusedNodeInScrollable = focusedNode;
       if (currentScrollableNodeForFocus == null && focusedNode != null) {
         // There are 2 situations that currentScrollableNodeForFocus is null so we use
-        // scrollableContainerNode as a backup suggestion.
+        // focusedNodeContainer as a backup suggestion.
         //
         // 1. After we enter a page, we might haven't received TYPE_VIEW_SCROLLED and the
         // currentScrollableNodeForFocus is null. So, we set it from the focused node's ancestor if
         // the ancestor is a scrollable container.
         // 2. The last source node from TYPE_VIEW_SCROLLED is not the ancestor of the that time
         // focused node.
-        currentScrollableNodeForFocus = scrollableContainerNode;
+        updateCurrentScrollableNodeForFocus(focusedNodeContainer, /* scrolledEvent= */ null);
       }
     } else {
-      currentFocusedNodeInScrollable = null;
+      clearCurrentFocusedNodeInScrollable();
     }
+  }
+
+  private void updateCurrentScrollableNodeForFocus(
+      AccessibilityNodeInfoCompat currentScrollableNodeForFocus, AccessibilityEvent scrolledEvent) {
+    this.currentScrollableNodeForFocus = currentScrollableNodeForFocus;
+    isReachToEdgeScrolledEvent = calculateReachToVerticalEdgeEvent(scrolledEvent);
+  }
+
+  private boolean calculateReachToVerticalEdgeEvent(AccessibilityEvent scrolledEvent) {
+    if (scrolledEvent == null) {
+      return false;
+    }
+
+    int maxScrollY = scrolledEvent.getMaxScrollY();
+    int scrollY = scrolledEvent.getScrollY();
+    LogUtils.v(
+        TAG, "calculateReachToVerticalEdgeEvent: scrollY=%d, maxScrollY=%d", scrollY, maxScrollY);
+
+    if (maxScrollY == 0) {
+      LogUtils.w(TAG, "invalid maxScrollY");
+      return false;
+    }
+
+    return scrollY == 0 || scrollY == maxScrollY;
+  }
+
+  private void clearCurrentFocusedNodeInScrollable() {
+    currentFocusedNodeInScrollable = null;
+    isReachToEdgeScrolledEvent = false;
+  }
+
+  // Returns true when the a11y focused node is out of a scrollable container and the input-focused
+  // node is scrollable node.
+  private boolean shouldInterceptForNodeOutOfScrollableNode(
+      @Nullable AccessibilityNodeInfoCompat focusedNode,
+      @Nullable AccessibilityNodeInfoCompat focusedNodeContainer) {
+
+    boolean isFocusedNodeOutOfScrollableContainer =
+        AccessibilityNodeInfoUtils.isVisible(focusedNode) && focusedNodeContainer == null;
+
+    AccessibilityNodeInfoCompat inputFocusedNode =
+        AccessibilityNodeInfoUtils.toCompat(service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT));
+    LogUtils.v(
+        TAG,
+        "shouldInterceptForNodeOutOfScrollableNode: focusedNode=%s, focusedNodeContainer=%s,"
+            + " isFocusedNodeOutOfScrollableContainer=%b, inputFocusedNode=%s",
+        focusedNode,
+        focusedNodeContainer,
+        isFocusedNodeOutOfScrollableContainer,
+        inputFocusedNode);
+    useForLogIsFocusedNodeOutOfScrollableContainer = isFocusedNodeOutOfScrollableContainer;
+    this.inputFocusedNode = inputFocusedNode;
+    return isFocusedNodeOutOfScrollableContainer
+        && (inputFocusedNode == null || isScrollableRoleContainer(inputFocusedNode));
   }
 
   private void updateScrollableNode(AccessibilityEvent event) {
@@ -271,7 +359,7 @@ public class MotionEventController implements AccessibilityEventListener {
         AccessibilityNodeInfoUtils.toCompat(event.getSource());
 
     if (AccessibilityNodeInfoUtils.hasDescendant(scrollableNode, currentFocusedNodeInScrollable)) {
-      currentScrollableNodeForFocus = scrollableNode;
+      updateCurrentScrollableNodeForFocus(scrollableNode, event);
     } else {
       currentScrollableNodeForFocus = null;
     }
@@ -286,20 +374,27 @@ public class MotionEventController implements AccessibilityEventListener {
 
     return AccessibilityNodeInfoUtils.getMatchingAncestor(
         node,
-        new Filter<AccessibilityNodeInfoCompat>() {
+        new Filter<>() {
           @Override
           public boolean accept(AccessibilityNodeInfoCompat ancestor) {
             if (ancestor == null) {
               return false;
             }
 
-            @RoleName int role = Role.getRole(ancestor);
-            return role == Role.ROLE_LIST
-                || role == Role.ROLE_GRID
-                || role == Role.ROLE_SCROLL_VIEW
-                || ancestor.getCollectionInfo() != null;
+            return isScrollableRoleContainer(ancestor);
           }
         });
+  }
+
+  private boolean isScrollableRoleContainer(@Nullable AccessibilityNodeInfoCompat node) {
+    if (node == null) {
+      return false;
+    }
+    @RoleName int role = Role.getRole(node);
+    return role == Role.ROLE_LIST
+        || role == Role.ROLE_GRID
+        || role == Role.ROLE_SCROLL_VIEW
+        || node.getCollectionInfo() != null;
   }
 
   @WorkerThread
@@ -320,12 +415,20 @@ public class MotionEventController implements AccessibilityEventListener {
     if (isHandlingMotionEvent == shouldHandleMotionEvent) {
       return;
     }
+    LogUtils.i(
+        TAG,
+        "interceptRotaryEncoderIfNeeded: change to shouldHandleMotionEvent=%b",
+        shouldHandleMotionEvent);
 
     interceptRotaryEncoderInternal(shouldHandleMotionEvent);
   }
 
   @WorkerThread
   private void interceptRotaryEncoderInternal(boolean shouldHandleMotionEvent) {
+    if (isHandlingMotionEvent == shouldHandleMotionEvent) {
+      return;
+    }
+
     AccessibilityServiceInfo info = service.getServiceInfo();
     if (info == null) {
       LogUtils.w(
@@ -349,25 +452,87 @@ public class MotionEventController implements AccessibilityEventListener {
   // Make it visible for testing since we cannot mock AccessibilityServiceInfo in Robolectric test.
   @VisibleForTesting
   boolean shouldHandleMotionEvent() {
-    boolean unsupportedDoubleSideScrollable =
-        currentScrollableNodeForFocus != null
-            && (!AccessibilityNodeInfoUtils.supportsAction(
-                    currentScrollableNodeForFocus, ACTION_SCROLL_BACKWARD.getId())
-                || !AccessibilityNodeInfoUtils.supportsAction(
-                    currentScrollableNodeForFocus, ACTION_SCROLL_FORWARD.getId()));
-    LogUtils.d(
+
+    LogUtils.i(
         TAG,
-        "shouldHandleMotionEvent: currentFocusedNodeInScrollable="
-            + currentFocusedNodeInScrollable);
-    LogUtils.d(
-        TAG,
-        "shouldHandleMotionEvent: currentScrollableNodeForFocus=" + currentScrollableNodeForFocus);
-    return currentFocusedNodeInScrollable != null && unsupportedDoubleSideScrollable;
+        """
+        shouldHandleMotionEvent: isInterceptForNodeOutOfScrollableNode=%b
+        currentFocusedNodeInScrollable=%s
+        currentScrollableNodeForFocus=%s\
+        """,
+        isInterceptForNodeOutOfScrollableNode,
+        currentFocusedNodeInScrollable,
+        currentScrollableNodeForFocus);
+
+    if (isInterceptForNodeOutOfScrollableNode) {
+      // We should handle it when the a11y focused node is out of any scrollable container and the
+      // input-focused node is a scrollable node, so intercepting it make users can traverse all
+      // node on the screen by RSB.
+      return true;
+    }
+
+    return currentFocusedNodeInScrollable != null && isUnsupportedDoubleSideScrollable();
+  }
+
+  private boolean isUnsupportedDoubleSideScrollable() {
+    AccessibilityNodeInfoCompat scrollableNode = currentScrollableNodeForFocus;
+    return scrollableNode != null
+        // We only intercept MotionEvent from the scrollable which has one of these conditions.
+        // 1.) It has input focus.
+        // The reason is that we don't want to intercept MotionEvent from the scrollable which is
+        // not the input-focused node. For example, the scrollable is a scrollable list and the
+        // input-focused node is a button in the list. In this case, we don't want to intercept
+        // MotionEvent from the scrollable list because users can use some input methods, like RSB,
+        // to control the button.
+        // 2.) It is from the TYPE_VIEW_SCROLLED events.
+        // The reason is the we already observe that the scrollable node has been scrolled. It has
+        // a large change that users are using RSB to scroll it. Otherwise, it violates Wear policy.
+        && (scrollableNode.isFocused()
+            || isReachToEdgeAndScrollableNodeRelevantToFocusedNode(scrollableNode))
+        && (!AccessibilityNodeInfoUtils.supportsAction(
+                scrollableNode, ACTION_SCROLL_BACKWARD.getId())
+            || !AccessibilityNodeInfoUtils.supportsAction(
+                scrollableNode, ACTION_SCROLL_FORWARD.getId()));
+  }
+
+  private boolean isReachToEdgeAndScrollableNodeRelevantToFocusedNode(
+      AccessibilityNodeInfoCompat scrollableNode) {
+    return isReachToEdgeScrolledEvent
+        && (AccessibilityNodeInfoUtils.hasDescendant(scrollableNode, inputFocusedNode)
+            || AccessibilityNodeInfoUtils.hasAncestor(scrollableNode, inputFocusedNode));
   }
 
   @VisibleForTesting
   Looper getBackgroundLooper() {
     return backgroundHandler.getLooper();
+  }
+
+  @VisibleForTesting
+  void setInputFocusedNode(AccessibilityNodeInfoCompat inputFocusedNode) {
+    this.inputFocusedNode = inputFocusedNode;
+  }
+
+  public void dump(Logger dumpLogger) {
+    dumpLogger.log(
+        """
+        TalkBackService MotionEventController's state:
+        shouldHandleMotionEvent=%b
+          isInterceptForNodeOutOfScrollableNode=%b
+            isFocusedNodeOutOfScrollableContainer=%s
+            inputFocusedNode=%s
+          isUnsupportedDoubleSideScrollable=%b
+            currentFocusedNodeInScrollable=%s
+            currentScrollableNodeForFocus=%s
+            isReachToEdgeScrolledEvent=%b
+        """,
+        shouldHandleMotionEvent(),
+        isInterceptForNodeOutOfScrollableNode,
+        useForLogIsFocusedNodeOutOfScrollableContainer,
+        inputFocusedNode,
+        isUnsupportedDoubleSideScrollable(),
+        currentFocusedNodeInScrollable,
+        currentScrollableNodeForFocus,
+        isReachToEdgeScrolledEvent);
   }
 
   private static final class MotionEventHandler

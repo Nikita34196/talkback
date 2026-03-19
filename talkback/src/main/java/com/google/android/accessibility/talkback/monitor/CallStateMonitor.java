@@ -220,16 +220,12 @@ public class CallStateMonitor extends SameThreadBroadcastReceiver {
   }
 
   private static String callStateToString(int state) {
-    switch (state) {
-      case TelephonyManager.CALL_STATE_IDLE:
-        return "CALL_STATE_IDLE";
-      case TelephonyManager.CALL_STATE_OFFHOOK:
-        return "CALL_STATE_OFFHOOK";
-      case TelephonyManager.CALL_STATE_RINGING:
-        return "CALL_STATE_RINGING";
-      default:
-        return "(unhandled)";
-    }
+    return switch (state) {
+      case TelephonyManager.CALL_STATE_IDLE -> "CALL_STATE_IDLE";
+      case TelephonyManager.CALL_STATE_OFFHOOK -> "CALL_STATE_OFFHOOK";
+      case TelephonyManager.CALL_STATE_RINGING -> "CALL_STATE_RINGING";
+      default -> "(unhandled)";
+    };
   }
 
   /**

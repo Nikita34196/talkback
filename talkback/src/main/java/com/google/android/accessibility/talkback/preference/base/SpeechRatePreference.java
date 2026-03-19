@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2025 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.google.android.accessibility.talkback.preference.base;
 
 import android.content.Context;
@@ -9,13 +24,14 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import androidx.preference.PreferenceViewHolder;
+import com.google.android.accessibility.material.preference.AccessibilitySeekBarPreference;
 import com.google.android.accessibility.talkback.R;
-import com.google.android.accessibility.talkback.actor.SpeechRateActor;
+import com.google.android.accessibility.talkback.actor.SpeechRateAndPitchActor;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Preference for adjusting talkback speech rate. The state description and increase/decrease value
- * actions are customized to match the SpeechRateActor used in selector.
+ * actions are customized to match the SpeechRateAndPitchActor used in selector.
  */
 public class SpeechRatePreference extends AccessibilitySeekBarPreference {
 
@@ -32,14 +48,14 @@ public class SpeechRatePreference extends AccessibilitySeekBarPreference {
   @Override
   public void onBindViewHolder(@NonNull PreferenceViewHolder holder) {
     super.onBindViewHolder(holder);
-    seekBar = (SeekBar) holder.findViewById(R.id.seekbar);
+    seekBar = (SeekBar) holder.findViewById(androidx.preference.R.id.seekbar);
 
     if (seekBar == null) {
       return;
     }
 
     ViewCompat.setStateDescription(
-        seekBar, getContext().getString(R.string.template_percent, String.valueOf(getValue())));
+        seekBar, getContext().getString(R.string.tb_template_percent, String.valueOf(getValue())));
 
     ViewCompat.replaceAccessibilityAction(
         seekBar,
@@ -49,7 +65,8 @@ public class SpeechRatePreference extends AccessibilitySeekBarPreference {
           int newRate =
               (int)
                   Math.max(
-                      getValue() / SpeechRateActor.RATE_STEP, SpeechRateActor.RATE_MINIMUM * 100);
+                      getValue() / SpeechRateAndPitchActor.RATE_STEP,
+                      SpeechRateAndPitchActor.RATE_MINIMUM * 100);
           setSeekBarValue(newRate);
           return true;
         });
@@ -62,7 +79,8 @@ public class SpeechRatePreference extends AccessibilitySeekBarPreference {
           int newRate =
               (int)
                   Math.min(
-                      getValue() * SpeechRateActor.RATE_STEP, SpeechRateActor.RATE_MAXIMUM * 100);
+                      getValue() * SpeechRateAndPitchActor.RATE_STEP,
+                      SpeechRateAndPitchActor.RATE_MAXIMUM * 100);
           setSeekBarValue(newRate);
           return true;
         });
@@ -78,7 +96,8 @@ public class SpeechRatePreference extends AccessibilitySeekBarPreference {
     }
 
     int forcedValue =
-        (int) (SpeechRateActor.forceRateToDefaultWhenClose((float) newValue / 100.0f) * 100);
+        (int)
+            (SpeechRateAndPitchActor.forceRateToDefaultWhenClose((float) newValue / 100.0f) * 100);
 
     // We can't call seekBar.setProgress() because it calls setProgressInternal(int progress,
     // boolean fromUser, boolean animate) with fromUser being false. Use set progress accessibility

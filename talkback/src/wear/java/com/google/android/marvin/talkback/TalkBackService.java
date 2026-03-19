@@ -4,6 +4,7 @@ import static android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
 import static android.view.KeyEvent.KEYCODE_VOLUME_UP;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
@@ -13,12 +14,17 @@ import android.util.Pair;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import androidx.annotation.NonNull;
-import com.google.android.accessibility.talkback.FeatureFlagReader;
+import com.google.android.accessibility.talkback.DumpComponent;
 import com.google.android.accessibility.talkback.MotionEventController;
 import com.google.android.accessibility.talkback.Pipeline;
+import com.google.android.accessibility.talkback.VibrationWatchIntegrator;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.utils.FeatureSupport;
 import com.google.android.accessibility.utils.FormFactorUtils;
+import com.google.android.accessibility.utils.Logger;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
+import java.util.List;
+import kotlin.Unit;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Wear-specific changes to TalkBackService. */
@@ -30,6 +36,7 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
 
   // A controller to intercept and handle motion events if needed.
   private @Nullable MotionEventController motionEventController;
+  private @Nullable VibrationWatchIntegrator vibrationWatchIntegrator;
 
   @Override
   public void onCreate() {
@@ -43,10 +50,11 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
   protected void onServiceConnected() {
     checkAudioOutput();
     super.onServiceConnected();
+    setSupportClickableLinks(false);
   }
 
   @Override
-  protected void onPipelineInitialized(Pipeline pipeline) {
+  protected void onTalkbackInitialized(Pipeline pipeline) {
     if (FeatureFlagReader.supportRsbScrolling(this)
         && FeatureSupport.supportMotionEventSources()
         && FeatureSupport.supportsRotaryEncoder()) {
@@ -54,6 +62,14 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
           new MotionEventController(this, pipeline.getFeedbackReturner(), getFeedbackController());
       addEventListener(motionEventController);
     }
+    if (isSystemApp(getApplicationInfo())) {
+      vibrationWatchIntegrator = new VibrationWatchIntegrator(this, gestureController);
+    }
+  }
+
+  private static boolean isSystemApp(ApplicationInfo applicationInfo) {
+    return (applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+        || (applicationInfo.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0;
   }
 
   @Override
@@ -62,6 +78,10 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
     if (motionEventController != null) {
       motionEventController.shutdown();
       motionEventController = null;
+    }
+    if (vibrationWatchIntegrator != null) {
+      vibrationWatchIntegrator.onShutDown();
+      vibrationWatchIntegrator = null;
     }
   }
 
@@ -73,14 +93,11 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
       AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
       for (AudioDeviceInfo device : devices) {
         switch (device.getType()) {
-          case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:
-            LogUtils.v(TAG, "Wear System with built-in speaker.");
-            break;
-          case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
-            LogUtils.v(TAG, "Wear System with Bluetooth audio.");
-            break;
-          default:
-            break;
+          case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER ->
+              LogUtils.v(TAG, "Wear System with built-in speaker.");
+          case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ->
+              LogUtils.v(TAG, "Wear System with Bluetooth audio.");
+          default -> {}
         }
       }
     }
@@ -115,7 +132,7 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
   private Pair<Integer, Integer> getVolumeStemButtons(Context context) {
     Pair<Integer, Integer> volumeButtons = new Pair<>(KEYCODE_VOLUME_UP, KEYCODE_VOLUME_DOWN);
     // Check that this is a watch, based on BUILD rules it should be.
-    if (!FormFactorUtils.getInstance().isAndroidWear()) {
+    if (!FormFactorUtils.isAndroidWear()) {
       return volumeButtons;
     }
     if (WearableButtons.getButtonCount(context) != NUM_STEM_BUTTONS_REQUIRED) {
@@ -156,5 +173,26 @@ public class TalkBackService extends com.google.android.accessibility.talkback.T
         sourceEvent.getScanCode(),
         sourceEvent.getFlags(),
         sourceEvent.getSource());
+  }
+
+  final DumpComponent componentMotionEventController =
+      new DumpComponent(
+          "motion_event_controller",
+          "dump the current state in the MotionEventController",
+          dumpLogger -> {
+            dumpMotionEventController(dumpLogger);
+            return Unit.INSTANCE;
+          });
+
+  private void dumpMotionEventController(Logger dumpLogger) {
+    if (motionEventController != null) {
+      motionEventController.dump(dumpLogger);
+    }
+  }
+
+  @Override
+  protected void inflateDumpComponents(List<DumpComponent> outDumpComponentList) {
+    outDumpComponentList.add(componentMotionEventController);
+    super.inflateDumpComponents(outDumpComponentList);
   }
 }

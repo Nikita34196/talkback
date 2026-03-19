@@ -17,9 +17,7 @@
 package com.google.android.accessibility.talkback.trainingcommon;
 
 import static android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
-import static android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS;
-import static com.google.android.accessibility.talkback.trainingcommon.NavigationButtonBar.BUTTON_TYPE_NEXT;
-import static com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId.PAGE_ID_UPDATE_WELCOME;
+import static android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES;
 
 import android.content.Context;
 import android.os.Bundle;
@@ -46,6 +44,8 @@ import com.google.android.accessibility.talkback.trainingcommon.content.PageButt
 import com.google.android.accessibility.talkback.trainingcommon.content.PageContentConfig;
 import com.google.android.accessibility.talkback.trainingcommon.content.PageNumber;
 import com.google.android.accessibility.talkback.trainingcommon.content.Title;
+import com.google.android.accessibility.talkback.trainingcommon.content.TutorialContentInterfaceInjector;
+import com.google.android.accessibility.talkback.trainingcommon.content.TutorialContentInterfaceInjector.TutorialContentManager;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import com.google.common.base.VerifyException;
@@ -62,20 +62,19 @@ public class TrainingFragment extends Fragment {
   public static final String EXTRA_VENDOR_PAGE_INDEX = "vendor_page_index";
 
   @Nullable private PageConfig page;
-  private LinearLayout pageLayout;
+  private View pageLayout;
   private LinearLayout pageBannerLayout;
   private LinkHandler linkHandler;
   private ServiceData data;
 
   @Nullable NavigationButtonBar navigationButtonBar;
+  private TutorialContentManager tutorialContentManager;
 
   // We only have supplier if this page has navigation bar and it is belong to some form factors.
   @Nullable private Function<Context, NavigationButtonBar> navigationButtonBarSupplier;
 
   private TrainingMetricStore metricStore;
   @Nullable private RepeatedAnnouncingHandler repeatedAnnouncingHandler;
-
-  private final FormFactorUtils formFactorUtils = FormFactorUtils.getInstance();
 
   void setNavigationButtonBarSupplier(
       Function<Context, NavigationButtonBar> navigationButtonBarSupplier) {
@@ -116,9 +115,12 @@ public class TrainingFragment extends Fragment {
     // However we don't need to worried about it now because we don't recreate the trainingActivity
     // in configuration changes.
     ViewGroup navBarContainer = view.findViewById(R.id.nav_container);
-    if (navBarContainer != null && navigationButtonBarSupplier != null) {
+    tutorialContentManager =
+        TutorialContentInterfaceInjector.getInstance()
+            .newTutorialContentManager(pageLayout, pageBannerLayout, navBarContainer);
+    if (navigationButtonBarSupplier != null) {
       navigationButtonBar = navigationButtonBarSupplier.apply(view.getContext());
-      navBarContainer.addView(navigationButtonBar);
+      tutorialContentManager.addNavigationContentView(navigationButtonBar);
     }
 
     int vendorPageIndex = arguments.getInt(EXTRA_VENDOR_PAGE_INDEX, PageConfig.UNKNOWN_PAGE_INDEX);
@@ -129,13 +131,9 @@ public class TrainingFragment extends Fragment {
       return view;
     }
 
-    addView(inflater, container);
     pageLayout.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+    addView(inflater, container);
 
-    // Make initial focus on training page layout but not on training banner.
-    if (page.isOnlyOneFocus() && pageBannerLayout != null && pageBannerLayout.getChildCount() > 0) {
-      setTrainingPageInitialFocus(view.findViewById(R.id.training_page_scroll));
-    }
     if (page.getIdleAnnouncementConfig() != null) {
       IdleAnnouncementConfig config = page.getIdleAnnouncementConfig();
       repeatedAnnouncingHandler =
@@ -147,7 +145,7 @@ public class TrainingFragment extends Fragment {
       LogUtils.v(TAG, "Idle announcement prepared.");
     }
 
-    if (formFactorUtils.isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       // Setting a pane title for fragment will trigger TYPE_WINDOW_STATE_CHANGED. It will drop an
       // immediate TYPE_VIEW_FOCUS event sent after the last window state changed event. As a
       // result, the dropped TYPE_VIEW_FOCUS event will not set a11y focus on the fragment.
@@ -165,7 +163,7 @@ public class TrainingFragment extends Fragment {
     // On TV, we apply the TalkBack focus always first on the text, then after clicking the center
     // button we move the input focus to the navigation buttons. Note that on TV, the TalkBack focus
     // automatically follows the input focus.
-    if (formFactorUtils.isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv()) {
       view.findViewById(R.id.training_page_wrapper)
           .setOnClickListener(
               clickedView -> {
@@ -203,12 +201,6 @@ public class TrainingFragment extends Fragment {
     this.data = data;
   }
 
-  public void moveInputFocusToNextButton() {
-    if (navigationButtonBar != null) {
-      navigationButtonBar.requestFocusOnButton(BUTTON_TYPE_NEXT);
-    }
-  }
-
   /** Creates and adds all contents to the fragment. */
   private void addView(LayoutInflater inflater, ViewGroup container) {
     if (page == null) {
@@ -217,53 +209,74 @@ public class TrainingFragment extends Fragment {
     }
 
     // Sets title.
-    Title title = new Title(page);
+    Title title =
+        TutorialContentInterfaceInjector.getInstance()
+            .getTutorialContentSupplier()
+            .provideTitle(page);
     View titleView = title.createView(inflater, container, getContext(), data);
     addView(titleView);
-    // Update welcome page title has the initial focus.
-    if (page.getPageId() == PAGE_ID_UPDATE_WELCOME) {
-      setTrainingPageInitialFocus(titleView);
-    }
 
     // Sets page number.
     int pageNumber = getArguments().getInt(EXTRA_PAGE_NUMBER);
     int totalNumber = getArguments().getInt(EXTRA_TOTAL_NUMBER);
+    View pageNumberView = null;
     if (pageNumber > 0 && totalNumber > 0) {
-      addView(
+      pageNumberView =
           new PageNumber(pageNumber, totalNumber)
-              .createView(inflater, container, getContext(), data));
+              .createView(inflater, container, getContext(), data);
+      addView(pageNumberView);
     }
 
     ImmutableList<PageContentConfig> contents = page.getContents();
     for (PageContentConfig content : contents) {
-      addView(content, inflater, container);
+      // Adds Page banner if needed.
+      if (tutorialContentManager.hasTutorialBannerContainer()
+          && content instanceof ExitBanner exitBanner) {
+        addPageBanner(exitBanner, inflater, container);
+        continue;
+      }
+      addView(createPageContentView(content, inflater, container));
+    }
+
+    // Make container screenReaderFocusable.
+    if (page.isOnlyOneFocus()) {
+      ViewCompat.setScreenReaderFocusable(pageLayout, true);
+    }
+
+    // Make initial focus on pageNumber or training page layout but not on training banner.
+    if (pageBannerLayout != null && pageBannerLayout.getChildCount() > 0) {
+      setTrainingPageInitialFocus(
+          (pageNumberView == null || page.isOnlyOneFocus()) ? pageLayout : pageNumberView);
     }
   }
 
-  private void addView(PageContentConfig content, LayoutInflater inflater, ViewGroup container) {
-    if (data != null && content.isNeedToShow(data)) {
-      // Add Page banner if needed.
-      if (content instanceof ExitBanner && pageBannerLayout != null) {
-        View view = content.createView(inflater, container, getContext(), data);
-        ((ExitBanner) content)
-            .setRequestDisableTalkBack(
-                () -> {
-                  try {
-                    ((TrainingActivity) getActivity()).onRequestDisableTalkBack();
-                  } catch (InterruptedException e) {
-                    throw new VerifyException(e);
-                  }
-                });
-        ((ExitBanner) content).setMetricStore(metricStore);
-        pageBannerLayout.addView(view);
-        return;
-      }
+  private void addPageBanner(ExitBanner content, LayoutInflater inflater, ViewGroup container) {
+    if (data == null || !content.isNeedToShow(data)) {
+      return;
+    }
 
+    View view = content.createView(inflater, container, getContext(), data);
+    content.setRequestDisableTalkBack(
+        () -> {
+          try {
+            ((TrainingActivity) getActivity()).onRequestDisableTalkBack();
+          } catch (InterruptedException e) {
+            throw new VerifyException(e);
+          }
+        });
+    content.setMetricStore(metricStore);
+    tutorialContentManager.addTutorialBanner(view);
+  }
+
+  @Nullable
+  private View createPageContentView(
+      PageContentConfig content, LayoutInflater inflater, ViewGroup container) {
+    if (data != null && content.isNeedToShow(data)) {
       // Sets a click listener to send message to TalkBack for a PageButton.
-      if (content instanceof PageButton) {
+      if (content instanceof PageButton pageButton) {
         View view = content.createView(inflater, container, getContext(), data);
-        @Nullable Button button = ((PageButton) content).getButton();
-        @Nullable Message message = ((PageButton) content).getMessage();
+        @Nullable Button button = pageButton.getButton();
+        @Nullable Message message = pageButton.getMessage();
         if (button != null && message != null) {
           button.setOnClickListener(
               v -> {
@@ -271,40 +284,46 @@ public class TrainingFragment extends Fragment {
                 ((TrainingActivity) getActivity()).checkAndSendMessageToService(message);
               });
         }
-        addView(view);
-        return;
+        return view;
       }
 
       // For the navigation contents, like Link and button.
-      if (content instanceof Link) {
-        ((Link) content).setLinkHandler(linkHandler);
+      if (content instanceof Link link) {
+        link.setLinkHandler(linkHandler);
       }
-      addView(content.createView(inflater, container, getContext(), data));
+      return content.createView(inflater, container, getContext(), data);
     } else {
       PageContentConfig substitute = content.getSubstitute();
       if (substitute == null) {
-        return;
+        return null;
       }
-      addView(substitute, inflater, container);
+      return createPageContentView(substitute, inflater, container);
     }
   }
 
-  private void addView(View view) {
+  /** Adds the view for the given content to the page. */
+  private void addView(@Nullable View view) {
+    if (view == null) {
+      // No view has to be shown on the screen.
+      return;
+    }
+
     if (page == null) {
       LogUtils.e(TAG, "Cannot add view to fragment because no page.");
+      return;
     }
 
     if (page.isOnlyOneFocus()) {
       // Entire page is spoken continuously. The focus is on the first child (pageLayout) of
-      // ViewPager, so the content view and its descendant views are not important for
-      // accessibility.
-      view.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+      // ViewPager, so the content view and its descendant views are not focusable.
+      view.setFocusable(false);
     }
-    pageLayout.addView(view);
+    tutorialContentManager.addTutorialContentView(view);
   }
 
   private void setTrainingPageInitialFocus(View view) {
     if (view != null) {
+      view.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
       ViewCompat.setAccessibilityDelegate(
           view,
           new AccessibilityDelegateCompat() {

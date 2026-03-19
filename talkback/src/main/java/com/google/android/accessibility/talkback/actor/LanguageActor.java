@@ -89,16 +89,36 @@ public class LanguageActor {
       return false;
     }
 
-    Set<Locale> languagesAvailable = actorState.getSpeechState().getLanguages();
-    if (languagesAvailable == null) {
+    // Prior to Q1 2025, Talkback and SelectToSpeak shared the same TTS voice policy due to both
+    // being in the same package. Q1 2025 onwards, Talkback and SelectToSpeak will have separate
+    // TTS voice policies so that the latter can have assistant voices without affecting the former.
+    // The code below ensures that logic relying on getVoices is compatible before and after the TTS
+    // configuration is submitted.
+    //
+    // Getting SelectToSpeak and Talkback languages because both will be configured as
+    // sub applications in TTS. Once configured, voices (and subsequently languages) will be the
+    // superset of both applications. If tts configured, we'll need to ensure that the
+    // languages are filtered by application. Otherwise, we'll default to the original logic.
+    Set<Locale> languagesAvailableTalkback = actorState.getSpeechState().getLanguages("TALKBACK");
+    Set<Locale> languagesAvailableSelectToSpeak =
+        (languagesAvailableTalkback != null)
+            ? null
+            : actorState.getSpeechState().getLanguages("SELECT_TO_SPEAK");
+
+    // If both are null, we are not tts configured, so use the original method instead.
+    if (languagesAvailableTalkback == null && languagesAvailableSelectToSpeak == null) {
+      languagesAvailableTalkback = actorState.getSpeechState().getLanguages();
+    }
+
+    if (languagesAvailableTalkback == null) {
       return false;
     }
     // The item is "Reset" means using system language.
-    languagesAvailable.add(null);
+    languagesAvailableTalkback.add(null);
 
-    LogUtils.v(TAG, "Installed languages: " + languagesAvailable);
-    if (languagesAvailable.size() >= 3) {
-      installLanguages = languagesAvailable;
+    LogUtils.v(TAG, "Installed languages: " + languagesAvailableTalkback);
+    if (languagesAvailableTalkback.size() >= 3) {
+      installLanguages = languagesAvailableTalkback;
       return true;
     }
 

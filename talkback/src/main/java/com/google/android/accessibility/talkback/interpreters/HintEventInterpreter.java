@@ -17,6 +17,7 @@
 package com.google.android.accessibility.talkback.interpreters;
 
 import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_FOCUSED;
+import static com.google.android.accessibility.utils.input.TextCursorTracker.NO_POSITION;
 import static com.google.android.accessibility.utils.input.TextEventInterpretation.SELECTION_MOVE_CURSOR_NO_SELECTION;
 import static com.google.android.accessibility.utils.input.TextEventInterpretation.TEXT_ADD;
 
@@ -91,7 +92,7 @@ public class HintEventInterpreter implements AccessibilityEventListener, Interpr
 
     final int eventType = event.getEventType();
     if (eventType == TYPE_VIEW_FOCUSED) {
-      if (FormFactorUtils.getInstance().isAndroidTv()) {
+      if (FormFactorUtils.isAndroidTv()) {
         // On TV, we will always sync accessibility-focus to input-focus, so it is sufficient to
         // speak on TYPE_VIEW_ACCESSIBILITY_FOCUSED.
         return;
@@ -159,10 +160,18 @@ public class HintEventInterpreter implements AccessibilityEventListener, Interpr
       boolean performSpellCheck = event != TEXT_ADD;
       // Suggestion span may not be ready when receiving a TYPE_VIEW_TEXT_CHANGED event,
       // so spelling suggestion can’t extract in TextEventInterpreter.
-      if (AccessibilityNodeInfoUtils.getSpellingSuggestions(context, node, performSpellCheck)
-          .isEmpty()) {
+      int currentCursorPosition = actorState.getEditState().getCurrentCursorPosition();
+      boolean noSpellingSuggestion =
+          currentCursorPosition == NO_POSITION
+              ? AccessibilityNodeInfoUtils.getSpellingSuggestions(context, node, performSpellCheck)
+                  .isEmpty()
+              : AccessibilityNodeInfoUtils.getSpellingSuggestions(
+                      context, node, currentCursorPosition, performSpellCheck)
+                  .isEmpty();
+      if (noSpellingSuggestion) {
         return;
       }
+
       // Sends a hint for spelling suggestion.
       pipelineInterpretationReceiver.input(
           interpretation.eventId, new Interpretation.ID(Value.SPELLING_SUGGESTION_HINT));

@@ -54,14 +54,14 @@
   <string name="voice_commands_Spell">लेख</string>
   <string name="voice_commands_talkback_settings">TalkBack का सेटिङ</string>
   <string name="voice_commands_talkback_setting">TalkBack का सेटिङ</string>
-  <string name="voice_commands_screen_search">स्क्रिनमा खोज्न थाल</string>
+  <string name="voice_commands_screen_search">स्क्रिनमा खोज्ने सुविधा</string>
   <string name="voice_commands_search_on_screen">स्क्रिनमा खोज</string>
   <string name="voice_commands_copy">@android:string/copy</string>
   <string name="voice_commands_cut">@android:string/cut</string>
   <string name="voice_commands_delete">मेटाऊ</string>
   <string name="voice_commands_paste">@android:string/paste</string>
-  <string name="voice_commands_notification">सूचना</string>
-  <string name="voice_commands_notifications">सूचनाहरू</string>
+  <string name="voice_commands_notification">नोटिफिकेसन</string>
+  <string name="voice_commands_notifications">नोटिफिकेसनहरू</string>
   <string name="voice_commands_verbosity_parameter">बोलेर दिनु पर्ने जानकारीको मात्रा %s बनाऊ</string>
   <string name="voice_commands_parameter_verbosity">%s भर्बोसिटी</string>
   <string name="voice_commands_change_verbosity_to_parameter">बोलेर दिनु पर्ने जानकारीको मात्रा बदलेर %s बनाऊ</string>
@@ -114,7 +114,7 @@
   <string name="voice_commands_help_verbosity_description">भर्बोसिटी उच्च, न्यून वा आफूले चाहे जति बनाउनुहोस्</string>
   <string name="voice_commands_help_first_description">यो स्क्रिनमा भएको पहिलो वस्तुमा जानुहोस्</string>
   <string name="voice_commands_help_last_description">यो स्क्रिनमा भएको अन्तिम वस्तुमा जानुहोस्</string>
-  <string name="voice_commands_help_languages_description">पाठ पढेर सुनाइने भाषा बदल्नुहोस् (टेक्स्ट-टू-स्पिच)</string>
+  <string name="voice_commands_help_languages_description">पढेर सुनाइने भाषा बदल्नुहोस् (टेक्स्ट-टू-स्पिच)</string>
   <string name="voice_commands_help_find_items_title">वस्तुहरू भेट्टाउनुहोस्</string>
   <string name="voice_commands_help_find_items_description">यो स्क्रिनमा कुनै खास सामग्री भेट्टाउनुहोस्</string>
   <string name="voice_commands_help_find_text">[सुरक्षित नामक शब्द] भेट्टाऊ</string>
@@ -127,7 +127,7 @@
   <string name="voice_commands_help_cut_description">कुनै टेक्स्ट कट गर्नुअघि त्यसलाई चयन गर्नुहोस्</string>
   <string name="voice_commands_help_delete_description">कुनै टेक्स्ट मेटाउनुअघि त्यसलाई चयन गर्नुहोस्</string>
   <string name="voice_commands_help_device_navigation_title">डिभाइस नेभिगेसन</string>
-  <string name="voice_commands_help_device_navigation_description">होम स्क्रिनमा जानुहोस्, अघिल्लो स्क्रिनमा फर्कनुहोस्, सूचनाहरू देखाउनुहोस् र अन्य कुरा गर्नुहोस्</string>
+  <string name="voice_commands_help_device_navigation_description">होम स्क्रिनमा जानुहोस्, अघिल्लो स्क्रिनमा फर्कनुहोस्, नोटिफिकेसनहरू देखाउनुहोस् र अन्य कुरा गर्नुहोस्</string>
   <string name="voice_commands_help_overview_description">हालसालै चलाइएका एपहरू हेर्नुहोस्</string>
   <string name="voice_commands_help_assistant_description">Google सहायक खोल्नुहोस्</string>
   <string name="voice_commands_help_other_commands_title">अन्य निर्देशनहरू</string>

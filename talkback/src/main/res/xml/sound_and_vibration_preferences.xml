@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
-  <com.google.android.accessibility.talkback.preference.base.AccessibilitySeekBarPreference
+  <com.google.android.accessibility.material.preference.AccessibilitySeekBarPreference
       android:defaultValue="@integer/pef_default_a11y_volume"
       android:key="@string/pref_a11y_volume_key"
       android:title="@string/title_pref_a11y_volume" />
@@ -9,11 +9,11 @@
       android:defaultValue="@integer/pref_speech_rate_default_int"
       android:key="@string/pref_speech_rate_seekbar_key_int"
       android:title="@string/title_pref_talkback_speech_rate" />
-  <SwitchPreference
+  <com.google.android.accessibility.material.preference.AccessibilitySuiteSwitchPreference
       android:defaultValue="@bool/pref_soundback_default"
       android:key="@string/pref_soundback_key"
       android:title="@string/title_pref_soundback" />
-  <com.google.android.accessibility.utils.preference.AccessibilitySuiteListPreference
+  <com.google.android.accessibility.material.preference.AccessibilitySuiteListPreference
       android:defaultValue="@string/pref_soundback_volume_default"
       android:dependency="@string/pref_soundback_key"
       android:dialogTitle="@string/title_pref_soundback_volume"
@@ -22,12 +22,12 @@
       android:key="@string/pref_soundback_volume_key"
       android:summary="%s"
       android:title="@string/title_pref_soundback_volume" />
-  <SwitchPreference
+  <com.google.android.accessibility.material.preference.AccessibilitySuiteSwitchPreference
       android:defaultValue="@bool/pref_use_audio_focus_default"
       android:key="@string/pref_use_audio_focus_key"
       android:title="@string/title_pref_use_audio_focus"
       android:summary="@string/summary_audio_ducking" />
-  <SwitchPreference
+  <com.google.android.accessibility.material.preference.AccessibilitySuiteSwitchPreference
       android:defaultValue="@bool/pref_vibration_default"
       android:key="@string/pref_vibration_key"
       android:title="@string/title_pref_vibration" />

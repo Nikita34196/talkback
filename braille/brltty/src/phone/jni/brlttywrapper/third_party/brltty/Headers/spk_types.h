@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -63,14 +63,14 @@ typedef void SetSpeechFinishedMethod (SpeechSynthesizer *spk);
 typedef void SetSpeechLocationMethod (SpeechSynthesizer *spk, int location);
 
 struct SpeechSynthesizerStruct {
-  unsigned char sayBanner : 1;
-  unsigned char canAutospeak : 1;
+  unsigned char sayBanner:1;
+  unsigned char canAutospeak:1;
 
   struct {
     int screenNumber;
     int firstLine;
     int speechLocation;
-    unsigned char isActive : 1;
+    unsigned char isActive:1;
   } track;
 
   SetSpeechVolumeMethod *setVolume;

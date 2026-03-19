@@ -32,6 +32,7 @@ import com.google.android.accessibility.talkback.monitor.CallStateMonitor;
 import com.google.android.accessibility.utils.monitor.AudioPlaybackMonitor;
 import com.google.android.accessibility.utils.monitor.HeadphoneStateMonitor;
 import com.google.android.accessibility.utils.monitor.MediaRecorderMonitor;
+import com.google.android.accessibility.utils.monitor.MediaRecorderMonitor.MicrophoneStateChangedListener;
 import com.google.android.accessibility.utils.monitor.SpeechStateMonitor;
 import com.google.android.accessibility.utils.monitor.VoiceActionDelegate;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
@@ -74,10 +75,16 @@ public class VoiceActionMonitor implements VoiceActionDelegate {
   @interface VoiceActionSource {}
 
   private final MediaRecorderMonitor.MicrophoneStateChangedListener microphoneStateChangedListener =
-      () -> {
-        if (!isHeadphoneOn()) {
-          interruptTalkBackAudio(MEDIA_RECORDER);
+      new MicrophoneStateChangedListener() {
+        @Override
+        public void onMicrophoneActivated() {
+          if (!isHeadphoneOn()) {
+            interruptTalkBackAudio(MEDIA_RECORDER);
+          }
         }
+
+        @Override
+        public void onMicrophoneDeactivated() {}
       };
 
   private final AudioPlaybackMonitor.AudioPlaybackStateChangedListener
@@ -156,8 +163,8 @@ public class VoiceActionMonitor implements VoiceActionDelegate {
    * Returns {@code true} if voice recognition/dictation is active and the user is not using a
    * headset.
    */
-  public boolean isSsbActiveAndHeadphoneOff() {
-    return isVoiceRecognitionActive() && !isHeadphoneOn();
+  public boolean isSsbActive() {
+    return isVoiceRecognitionActive();
   }
 
   /** Returns {@code true} if phone call is active. */

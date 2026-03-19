@@ -30,6 +30,7 @@ import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.talkback.focusmanagement.AccessibilityFocusMonitor;
 import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.SpellChecker;
+import com.google.android.accessibility.utils.input.TextCursorTracker;
 import com.google.android.accessibility.utils.output.FeedbackItem;
 import com.google.android.accessibility.utils.output.SpeechController;
 import com.google.android.accessibility.utils.output.SpeechController.SpeakOptions;
@@ -42,12 +43,22 @@ public class TypoNavigator {
   private Pipeline.FeedbackReturner pipeline;
   private final TextEditActor editor;
   private final AccessibilityFocusMonitor accessibilityFocusMonitor;
+  @Nullable private final TextCursorTracker textCursorTracker;
 
   public TypoNavigator(
       Context context, TextEditActor editor, AccessibilityFocusMonitor accessibilityFocusMonitor) {
+    this(context, editor, accessibilityFocusMonitor, /* textCursorTracker= */ null);
+  }
+
+  public TypoNavigator(
+      Context context,
+      TextEditActor editor,
+      AccessibilityFocusMonitor accessibilityFocusMonitor,
+      @Nullable TextCursorTracker textCursorTracker) {
     this.context = context;
     this.editor = editor;
     this.accessibilityFocusMonitor = accessibilityFocusMonitor;
+    this.textCursorTracker = textCursorTracker;
   }
 
   public void setPipeline(Pipeline.FeedbackReturner pipeline) {
@@ -78,9 +89,12 @@ public class TypoNavigator {
       feedbackNoTypo(eventId);
       return false;
     }
-    if (text instanceof Spannable) {
-      int cursorPosition = node.getTextSelectionStart();
-      Spanned spanned = (Spanned) text;
+    if (text instanceof Spannable spanned) {
+      SpellChecker.dumpSuggestionSpans(node, text);
+      int cursorPosition =
+          textCursorTracker == null
+              ? node.getTextSelectionStart()
+              : textCursorTracker.getCurrentCursorPosition();
       SuggestionSpan[] spansAfterCursor =
           spanned.getSpans(cursorPosition, spanned.length(), SuggestionSpan.class);
       SuggestionSpan[] spansBeforeCursor =
@@ -108,7 +122,7 @@ public class TypoNavigator {
           }
         }
         if (targetSpan != null) {
-          result = feedbackTypo(node, spanned, eventId, targetSpan);
+          result = feedbackTypo(node, spanned, eventId, targetSpan, cursorPosition);
         }
         if (!result) {
           SuggestionSpan[] currentSpans =
@@ -151,16 +165,16 @@ public class TypoNavigator {
       AccessibilityNodeInfoCompat node,
       Spanned textWithSuggestionSpans,
       EventId eventId,
-      SuggestionSpan targetSpan) {
-    int cursor = textWithSuggestionSpans.getSpanStart(targetSpan);
+      SuggestionSpan targetSpan,
+      int cursorPosition) {
+    int start = textWithSuggestionSpans.getSpanStart(targetSpan);
     int end = textWithSuggestionSpans.getSpanEnd(targetSpan);
-    if (cursor != Integer.MAX_VALUE && cursor != -1 && end != -1) {
-      boolean result =
-          (cursor == node.getTextSelectionStart()) || editor.moveCursor(node, cursor, eventId);
+    if (start != Integer.MAX_VALUE && start != -1 && end != -1) {
+      boolean result = (start == cursorPosition) || editor.moveCursor(node, start, eventId);
       if (result) {
         pipeline.returnFeedback(
             eventId,
-            getSpeechFeedbackBuilder(textWithSuggestionSpans.subSequence(cursor, end), R.raw.typo));
+            getSpeechFeedbackBuilder(textWithSuggestionSpans.subSequence(start, end), R.raw.typo));
         if (targetSpan.getSuggestions().length == 0) {
           pipeline.returnFeedback(
               eventId,

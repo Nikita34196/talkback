@@ -23,8 +23,10 @@ import android.view.accessibility.AccessibilityEvent;
 public interface BrailleDisplayForTalkBack {
   /** Starts braille display. */
   void start();
+
   /** Stops braille display. */
   void stop();
+
   /** Notifies receiving accessibility event. */
   void onAccessibilityEvent(AccessibilityEvent accessibilityEvent);
 
@@ -32,7 +34,17 @@ public interface BrailleDisplayForTalkBack {
   boolean onKeyEvent(KeyEvent keyEvent);
 
   /** Notifies receiving reading control changed with overlay shown event. */
-  void onReadingControlChanged(CharSequence readingControlDescription);
+  void onReadingControlSettingsChanged(CharSequence readingControlDescription);
+
+  /** Notifies receiving reading control value changed. */
+  void onReadingControlValueChanged();
+
   /** Switches braille display on or off. */
   void switchBrailleDisplayOnOrOff();
+
+  /** Toggles braille contracted mode. */
+  void toggleBrailleContractedMode();
+
+  /** Toggles braille on screen overlay. */
+  void toggleBrailleOnScreenOverlay();
 }

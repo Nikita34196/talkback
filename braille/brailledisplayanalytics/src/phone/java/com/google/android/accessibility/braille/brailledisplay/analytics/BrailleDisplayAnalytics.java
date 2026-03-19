@@ -17,6 +17,7 @@
 package com.google.android.accessibility.braille.brailledisplay.analytics;
 
 import android.content.Context;
+import com.google.android.accessibility.braille.common.DeviceProvider;
 import com.google.android.accessibility.braille.common.translate.BrailleLanguages.Code;
 
 /** Stub braille display analytics. */
@@ -32,6 +33,10 @@ public class BrailleDisplayAnalytics {
 
   private BrailleDisplayAnalytics(Context context) {}
 
+  public void startDailyLogging() {}
+
+  public void stopDailyLogging() {}
+
   public void logStartedEvent(
       String driverCode,
       String deviceName,
@@ -41,6 +46,26 @@ public class BrailleDisplayAnalytics {
       boolean outputContracted,
       boolean supportHid,
       boolean bluetoothDevice) {}
+
+  public void logConnectAttempt(
+      String driverCode,
+      String deviceName,
+      boolean manualConnect,
+      DeviceProvider<?> deviceProvider) {}
+
+  public void logConnectionAttemptHidStart() {}
+
+  public void logConnectionAttemptRfcommStart() {}
+
+  public void logConnectionAttemptSerialStart() {}
+
+  public void logHidConnectRecord(boolean success) {}
+
+  public void logRfcommConnectRecord(boolean success) {}
+
+  public void logBrlttyConnectRecord(boolean success) {}
+
+  public void logConnectionAttemptReset() {}
 
   public void logTypingBrailleCharacter(int count) {}
 
@@ -58,17 +83,23 @@ public class BrailleDisplayAnalytics {
 
   public void logBrailleCommand(int command) {}
 
-  public void logStartToEstablishRfcommConnection() {}
+  public void logStartToEstablishRfcommConnection(boolean initial) {}
 
-  public void logStartToEstablishHidConnection() {}
+  public void logStartToEstablishHidConnection(boolean initial) {}
 
-  public void logConnectionReset() {}
+  public void logStartToConnectToSerialConnection(boolean initial) {}
 
   public void logStartToConnectToBrailleDisplay() {}
+
+  public void logConnectionReset() {}
 
   public void logBlinkRate(int millisecond) {}
 
   public void logReversePanningKey(boolean enabled) {}
 
   public void logTimedMessageDurationMs(int millisecond) {}
+
+  public void logPopupUsage() {}
+
+  public void logCaptionUsage() {}
 }

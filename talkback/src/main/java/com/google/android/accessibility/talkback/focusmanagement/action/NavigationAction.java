@@ -18,6 +18,7 @@ package com.google.android.accessibility.talkback.focusmanagement.action;
 
 import static com.google.android.accessibility.utils.monitor.InputModeTracker.INPUT_MODE_UNKNOWN;
 
+import android.util.Pair;
 import androidx.annotation.IntDef;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.talkback.focusmanagement.NavigationTarget;
@@ -79,9 +80,11 @@ public class NavigationAction {
   public final boolean useInputFocusAsPivotIfEmpty;
   public final CursorGranularity originalNavigationGranularity;
   public final int autoScrollAttempt;
+  public final boolean isPrevScrolled;
   public final int prevScrollDeltaSumX;
   public final int prevScrollDeltaSumY;
-
+  public final Pair<Integer, Integer> pivotIndex;
+  public final Pair<Integer, Integer> positionForScroll;
   public final AccessibilityNodeInfoCompat fallbackTarget;
 
   private NavigationAction(Builder builder) {
@@ -94,8 +97,11 @@ public class NavigationAction {
     useInputFocusAsPivotIfEmpty = builder.useInputFocusAsPivotIfEmpty;
     originalNavigationGranularity = builder.originalNavigationGranularity;
     autoScrollAttempt = builder.autoScrollAttempt;
+    isPrevScrolled = builder.isPrevScrolled;
     prevScrollDeltaSumX = builder.prevScrollDeltaSumX;
     prevScrollDeltaSumY = builder.prevScrollDeltaSumY;
+    pivotIndex = builder.pivotIndex;
+    positionForScroll = builder.positionForScroll;
     fallbackTarget = builder.fallbackTarget;
   }
 
@@ -111,8 +117,10 @@ public class NavigationAction {
         useInputFocusAsPivotIfEmpty,
         originalNavigationGranularity,
         autoScrollAttempt,
+        isPrevScrolled,
         prevScrollDeltaSumX,
         prevScrollDeltaSumY,
+        pivotIndex,
         fallbackTarget);
   }
 
@@ -131,8 +139,11 @@ public class NavigationAction {
         && this.useInputFocusAsPivotIfEmpty == other.useInputFocusAsPivotIfEmpty
         && this.originalNavigationGranularity == other.originalNavigationGranularity
         && this.autoScrollAttempt == other.autoScrollAttempt
+        && this.isPrevScrolled == other.isPrevScrolled
         && this.prevScrollDeltaSumX == other.prevScrollDeltaSumX
         && this.prevScrollDeltaSumY == other.prevScrollDeltaSumY
+        && this.pivotIndex == other.pivotIndex
+        && this.positionForScroll == other.positionForScroll
         && this.fallbackTarget == other.fallbackTarget;
   }
 
@@ -150,36 +161,29 @@ public class NavigationAction {
     sb.append(", useInputFocusAsPivotIfEmpty=").append(useInputFocusAsPivotIfEmpty);
     sb.append(", originalNavigationGranularity=").append(originalNavigationGranularity);
     sb.append(", autoScrollAttempt=").append(autoScrollAttempt);
+    sb.append(", isPrevScrolled=").append(isPrevScrolled);
     sb.append(", prevScrollDeltaSumX=").append(prevScrollDeltaSumX);
     sb.append(", prevScrollDeltaSumY=").append(prevScrollDeltaSumY);
+    sb.append(", pivotIndex=").append(pivotIndex);
+    sb.append(", positionForScroll=").append(positionForScroll);
     sb.append(", fallbackTarget=").append(fallbackTarget);
     sb.append('}');
     return sb.toString();
   }
 
   public static String actionTypeToString(@ActionType int actionType) {
-    switch (actionType) {
-      case DIRECTIONAL_NAVIGATION:
-        return "DIRECTIONAL_NAVIGATION";
-      case JUMP_TO_TOP:
-        return "JUMP_TO_TOP";
-      case JUMP_TO_BOTTOM:
-        return "JUMP_TO_BOTTOM";
-      case SCROLL_FORWARD:
-        return "SCROLL_FORWARD";
-      case SCROLL_BACKWARD:
-        return "SCROLL_BACKWARD";
-      case SCROLL_UP:
-        return "SCROLL_UP";
-      case SCROLL_DOWN:
-        return "SCROLL_DOWN";
-      case SCROLL_LEFT:
-        return "SCROLL_LEFT";
-      case SCROLL_RIGHT:
-        return "SCROLL_RIGHT";
-      default:
-        return "UNKNOWN";
-    }
+    return switch (actionType) {
+      case DIRECTIONAL_NAVIGATION -> "DIRECTIONAL_NAVIGATION";
+      case JUMP_TO_TOP -> "JUMP_TO_TOP";
+      case JUMP_TO_BOTTOM -> "JUMP_TO_BOTTOM";
+      case SCROLL_FORWARD -> "SCROLL_FORWARD";
+      case SCROLL_BACKWARD -> "SCROLL_BACKWARD";
+      case SCROLL_UP -> "SCROLL_UP";
+      case SCROLL_DOWN -> "SCROLL_DOWN";
+      case SCROLL_LEFT -> "SCROLL_LEFT";
+      case SCROLL_RIGHT -> "SCROLL_RIGHT";
+      default -> "UNKNOWN";
+    };
   }
 
   /** Builds {@link NavigationAction}. */
@@ -193,9 +197,11 @@ public class NavigationAction {
     private boolean useInputFocusAsPivotIfEmpty = false;
     private @Nullable CursorGranularity originalNavigationGranularity = null;
     private int autoScrollAttempt = 0;
+    private boolean isPrevScrolled = false;
     private int prevScrollDeltaSumX = 0;
     private int prevScrollDeltaSumY = 0;
-
+    private Pair<Integer, Integer> pivotIndex = null;
+    private Pair<Integer, Integer> positionForScroll = null;
     private AccessibilityNodeInfoCompat fallbackTarget = null;
 
     public static Builder copy(NavigationAction action) {
@@ -209,8 +215,11 @@ public class NavigationAction {
       builder.useInputFocusAsPivotIfEmpty = action.useInputFocusAsPivotIfEmpty;
       builder.originalNavigationGranularity = action.originalNavigationGranularity;
       builder.autoScrollAttempt = action.autoScrollAttempt;
+      builder.isPrevScrolled = action.isPrevScrolled;
       builder.prevScrollDeltaSumX = action.prevScrollDeltaSumX;
       builder.prevScrollDeltaSumY = action.prevScrollDeltaSumY;
+      builder.pivotIndex = action.pivotIndex;
+      builder.positionForScroll = action.positionForScroll;
       builder.fallbackTarget = action.fallbackTarget;
       return builder;
     }
@@ -275,6 +284,12 @@ public class NavigationAction {
     }
 
     @CanIgnoreReturnValue
+    public Builder setIsPrevScrolled(boolean isPrevScrolled) {
+      this.isPrevScrolled = isPrevScrolled;
+      return this;
+    }
+
+    @CanIgnoreReturnValue
     public Builder setPrevScrollDeltaSumX(int prevScrollDeltaSumX) {
       this.prevScrollDeltaSumX = prevScrollDeltaSumX;
       return this;
@@ -283,6 +298,18 @@ public class NavigationAction {
     @CanIgnoreReturnValue
     public Builder setPrevScrollDeltaSumY(int prevScrollDeltaSumY) {
       this.prevScrollDeltaSumY = prevScrollDeltaSumY;
+      return this;
+    }
+
+    @CanIgnoreReturnValue
+    public Builder setPivotIndex(Pair<Integer, Integer> pivotIndex) {
+      this.pivotIndex = pivotIndex;
+      return this;
+    }
+
+    @CanIgnoreReturnValue
+    public Builder setPositionForScroll(Pair<Integer, Integer> positionForScroll) {
+      this.positionForScroll = positionForScroll;
       return this;
     }
 

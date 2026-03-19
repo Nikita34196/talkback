@@ -18,6 +18,7 @@ package com.google.android.accessibility.braille.brltty;
 
 import android.content.Context;
 import java.util.Optional;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
 /** Stub Brltty encoder. */
@@ -30,17 +31,13 @@ public class BrlttyEncoder implements Encoder {
     public Encoder createEncoder(Context context, Callback callback) {
       return new BrlttyEncoder(context, callback);
     }
-
-    @Override
-    public Predicate<String> getDeviceNameFilter() {
-      return null;
-    }
   }
 
   public BrlttyEncoder(Context context, Callback callback) {}
 
   @Override
-  public Optional<BrailleDisplayProperties> start(String deviceName, String parameters) {
+  public Optional<BrailleDisplayProperties> start(
+      String name, int vendorId, int prodId, boolean useHid, String parameters) {
     return Optional.empty();
   }
 
@@ -56,5 +53,15 @@ public class BrlttyEncoder implements Encoder {
   @Override
   public int readCommand() {
     return 0;
+  }
+
+  @Override
+  public Predicate<String> getDeviceNameFilter() {
+    return s -> false;
+  }
+
+  @Override
+  public BiPredicate<Integer, Integer> getDeviceVendorProdIdFilter() {
+    return (integer, integer2) -> false;
   }
 }

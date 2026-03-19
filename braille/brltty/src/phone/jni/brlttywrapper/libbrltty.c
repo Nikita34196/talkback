@@ -102,12 +102,15 @@ listKeyBinding(const KeyBinding *binding, const KeyTable* keyTable,
 static const char*
 findKeyName(const KeyTable* keyTable, const KeyValue* value);
 
+static void
+deallocateCommandQueueItem (void *item, void *data);
+
 int
 brltty_initialize (const char* driverCode, const char* brailleDevice,
                    const char* tablesDir) {
   int ret = 0;
   systemLogLevel = LOG_DEBUG;
-
+  forgetDevices();
   setPreferences(&prefSettings);
 
   logMessage(LOG_DEBUG, "Loading braille driver %s", driverCode);
@@ -163,7 +166,7 @@ brltty_initialize (const char* driverCode, const char* brailleDevice,
   pushCommandHandler("libbrltty-android", KTB_CTX_DEFAULT,
   brltty_handleCommand, NULL /* destroy handler */, NULL /* data */);
 
-  commandQueue = newQueue(NULL, NULL);
+  commandQueue = newQueue(deallocateCommandQueueItem, /* compareItems= */NULL);
 
   setAutorepeatProperties(&brailleDisplay, prefs.autorepeatEnabled,
                           PREFS2MSECS(prefs.longPressTime),
@@ -200,7 +203,6 @@ brltty_destroy(void) {
     logMessage(LOG_ERR, "Double destruction of braille driver");
     return 0;
   }
-  destructBrailleDisplay(&brailleDisplay);
 
   deallocateQueue(commandQueue);
   commandQueue = NULL;
@@ -209,8 +211,12 @@ brltty_destroy(void) {
   endCommandQueue();
 
   braille->destruct(&brailleDisplay);
+  destructBrailleDisplay(&brailleDisplay);
+
   freeDriverParameters();
   braille = NULL;
+
+  forgetDevices();
   return 0;
 }
 
@@ -452,4 +458,11 @@ findKeyName(const KeyTable *keyTable, const KeyValue *value) {
                value->group, value->number);
     return NULL;
   }
+}
+
+static void
+deallocateCommandQueueItem (void *item, void *data) {
+  CommandQueueItem *cmd = item;
+
+  free(cmd);
 }

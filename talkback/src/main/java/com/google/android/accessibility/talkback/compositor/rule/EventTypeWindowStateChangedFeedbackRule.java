@@ -94,13 +94,16 @@ public final class EventTypeWindowStateChangedFeedbackRule {
   private static CharSequence getWindowStateChangedStateText(
       AccessibilityEvent event, int role, CharSequence eventDescription, Context context) {
     switch (role) {
-      case Role.ROLE_DRAWER_LAYOUT:
+      case Role.ROLE_DRAWER_LAYOUT -> {
         return context.getString(R.string.template_drawer_opened, eventDescription);
-      case Role.ROLE_ICON_MENU:
+      }
+      case Role.ROLE_ICON_MENU -> {
         return context.getString(R.string.value_options_menu_open);
-      case Role.ROLE_SLIDING_DRAWER:
+      }
+      case Role.ROLE_SLIDING_DRAWER -> {
         return context.getString(R.string.value_sliding_drawer_opened);
-      case Role.ROLE_LIST:
+      }
+      case Role.ROLE_LIST -> {
         if (TextUtils.isEmpty(eventDescription)) {
           return "";
         }
@@ -117,8 +120,10 @@ public final class EventTypeWindowStateChangedFeedbackRule {
                   R.plurals.template_containers, itemCount, eventDescription, itemCount);
         }
         return "";
-      default:
+      }
+      default -> {
         return "";
+      }
     }
   }
 

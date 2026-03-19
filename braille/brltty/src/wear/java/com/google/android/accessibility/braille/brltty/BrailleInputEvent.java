@@ -236,12 +236,14 @@ public class BrailleInputEvent implements Parcelable {
 
   /** This command doesn't have an argument. */
   public static final int ARGUMENT_NONE = 0;
+
   /**
-   * The lower order bits of the arguemnt to this command represent braille dots. Dot 1 is
+   * The lower order bits of the argument to this command represent braille dots. Dot 1 is
    * represented by the rightmost bit and so on until dot 8, which is represented by bit 7, counted
    * from the right.
    */
   public static final int ARGUMENT_DOTS = 1;
+
   /** The argument represents a 0-based position on the display counted from the leftmost cell. */
   public static final int ARGUMENT_POSITION = 2;
 
@@ -278,17 +280,12 @@ public class BrailleInputEvent implements Parcelable {
 
   /** Returns the type of argument for the given {@code command}. */
   public static int argumentType(int command) {
-    switch (command) {
-      case CMD_SELECTION_START:
-      case CMD_SELECTION_END:
-      case CMD_ROUTE:
-      case CMD_LONG_PRESS_ROUTE:
-        return ARGUMENT_POSITION;
-      case CMD_BRAILLE_KEY:
-        return ARGUMENT_DOTS;
-      default:
-        return ARGUMENT_NONE;
-    }
+    return switch (command) {
+      case CMD_SELECTION_START, CMD_SELECTION_END, CMD_ROUTE, CMD_LONG_PRESS_ROUTE ->
+          ARGUMENT_POSITION;
+      case CMD_BRAILLE_KEY -> ARGUMENT_DOTS;
+      default -> ARGUMENT_NONE;
+    };
   }
 
   @Override

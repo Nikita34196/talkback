@@ -1,74 +1,87 @@
 /*
- * Copyright 2024 Google Inc.
+ * Copyright (C) 2024 The Android Open Source Project
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
  */
 package com.google.android.accessibility.braille.brailledisplay.platform.connect.hid;
 
+import android.accessibilityservice.BrailleDisplayController;
 import android.content.Context;
 import com.google.android.accessibility.braille.brailledisplay.BrailleDisplayLog;
 import com.google.android.accessibility.braille.brailledisplay.FeatureFlagReader;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.Connector;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.D2dConnection;
 import com.google.android.accessibility.braille.brailledisplay.platform.connect.device.ConnectableDevice;
-import com.google.android.accessibility.braille.common.FakeBrailleDisplayController;
+import com.google.android.accessibility.braille.brltty.BrlttyHidNativeHelper;
 import java.util.Arrays;
 
 /** Sets up a connection using Hid protocol. */
 public abstract class HidConnector extends Connector {
   private static final String TAG = "HidConnector";
   private final Context context;
-  private final Connector.Callback connectorCallback;
-  private final FakeBrailleDisplayController brailleDisplayController;
+  private final BrailleDisplayController brailleDisplayController;
 
   public HidConnector(
       Context context,
       ConnectableDevice device,
       Connector.Callback callback,
-      FakeBrailleDisplayController brailleDisplayController) {
-    super(device);
+      BrailleDisplayController brailleDisplayController) {
+    super(device, callback);
     this.context = context;
-    this.connectorCallback = callback;
     this.brailleDisplayController = brailleDisplayController;
   }
 
   /** Returns if a connector for HID available. */
   public boolean isAvailable() {
-    return FeatureFlagReader.isBdHidSupported(context);
+    return FeatureFlagReader.isBdHidSupported(context) && brailleDisplayController != null;
   }
 
-  /** Get BrailleDisplayController. */
-  public FakeBrailleDisplayController getBrailleDisplayController() {
+  /** Gets BrailleDisplayController. */
+  public BrailleDisplayController getBrailleDisplayController() {
     return brailleDisplayController;
   }
 
   /** BrailleDisplayController.BrailleDisplayCallback comes from framework. */
-  public class BrailleDisplayCallback
-      implements FakeBrailleDisplayController.BrailleDisplayCallback {
+  public static class BrailleDisplayCallback
+      implements BrailleDisplayController.BrailleDisplayCallback {
     private byte[] previousInput;
     private D2dConnection.Callback d2dConnectionCallback;
+
+    protected final BrailleDisplayController brailleDisplayController;
+    protected final Connector.Callback connectorCallback;
+    protected final ConnectableDevice device;
+
+    public BrailleDisplayCallback(
+        BrailleDisplayController controller,
+        Connector.Callback callback,
+        ConnectableDevice device) {
+      this.brailleDisplayController = controller;
+      this.connectorCallback = callback;
+      this.device = device;
+    }
 
     @Override
     public void onConnected(byte[] descriptor) {
       BrailleDisplayLog.d(TAG, "BrailleDisplayCallback#onConnected");
+      BrlttyHidNativeHelper.setup(brailleDisplayController, descriptor);
       connectorCallback.onConnectSuccess(
-          new HidConnection(getDevice(), callback -> d2dConnectionCallback = callback));
+          new HidConnection(device, callback -> d2dConnectionCallback = callback));
     }
 
     @Override
     public void onConnectionFailed(int error) {
       BrailleDisplayLog.e(TAG, "BrailleDisplayCallback#onConnectionFailed error=" + error);
-      connectorCallback.onConnectFailure(getDevice(), new Exception(String.valueOf(error)));
+      connectorCallback.onConnectFailure(device, new Exception(String.valueOf(error)));
     }
 
     @Override
@@ -86,6 +99,7 @@ public abstract class HidConnector extends Connector {
         return;
       }
       previousInput = input;
+      BrlttyHidNativeHelper.onInput(input);
       if (d2dConnectionCallback != null) {
         d2dConnectionCallback.onRead();
       }

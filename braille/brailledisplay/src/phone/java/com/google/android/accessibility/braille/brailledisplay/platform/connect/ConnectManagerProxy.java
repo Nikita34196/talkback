@@ -49,11 +49,15 @@ public class ConnectManagerProxy extends ConnectManager {
   /** Switch connect manager based one connect type. */
   public void switchTo(ConnectType type) {
     if (type == ConnectType.USB) {
-      btConnectManager.onStop();
-      connectManager = usbConnectManager;
+      if (!(connectManager instanceof UsbConnectManager)) {
+        btConnectManager.onStop();
+        connectManager = usbConnectManager;
+      }
     } else {
-      usbConnectManager.onStop();
-      connectManager = btConnectManager;
+      if (!(connectManager instanceof BtConnectManager)) {
+        usbConnectManager.onStop();
+        connectManager = btConnectManager;
+      }
     }
   }
 
@@ -83,8 +87,8 @@ public class ConnectManagerProxy extends ConnectManager {
   }
 
   @Override
-  public void connect(ConnectableDevice device, boolean manual) {
-    connectManager.connect(device, manual);
+  public void connect(ConnectableDevice device) {
+    connectManager.connect(device);
   }
 
   @Override
@@ -113,6 +117,11 @@ public class ConnectManagerProxy extends ConnectManager {
   }
 
   @Override
+  public boolean isConnectingOrConnected(String deviceAddress) {
+    return connectManager.isConnectingOrConnected(deviceAddress);
+  }
+
+  @Override
   public boolean isScanning() {
     return connectManager.isScanning();
   }
@@ -128,13 +137,8 @@ public class ConnectManagerProxy extends ConnectManager {
   }
 
   @Override
-  public Optional<ConnectableDevice> getCurrentlyConnectingDevice() {
-    return connectManager.getCurrentlyConnectingDevice();
-  }
-
-  @Override
-  public Optional<ConnectableDevice> getCurrentlyConnectedDevice() {
-    return connectManager.getCurrentlyConnectedDevice();
+  public Optional<ConnectableDevice> getConnectingOrConnectedDevice() {
+    return connectManager.getConnectingOrConnectedDevice();
   }
 
   @Override

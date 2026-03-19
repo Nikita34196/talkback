@@ -21,7 +21,8 @@
           android:layout_height="wrap_content"
           android:scrollbars="vertical"
           android:textSize="18sp"
-          android:layout_marginBottom="20dp"/>
+          android:layout_marginBottom="20dp"
+          android:textAppearance="@style/A11yAlertDialogSubtitleStyle"/>
       <com.google.android.material.button.MaterialButton
           android:layout_below="@id/content"
           android:id="@+id/open_settings"

@@ -83,11 +83,11 @@ public class DiagnosticOverlay extends SimpleOverlay {
     @Override
     protected void handleMessage(Message msg, DiagnosticOverlay parent) {
       switch (msg.what) {
-        case MSG_CLEAR_TEXT:
+        case MSG_CLEAR_TEXT -> {
           parent.mText.setText("");
           parent.hide();
-          break;
-        default: // fall out
+        }
+        default -> {}
       }
     }
   }

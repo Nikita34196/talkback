@@ -16,13 +16,19 @@
 
 package com.google.android.accessibility.talkback.feedbackpolicy;
 
+import static android.view.accessibility.AccessibilityEvent.CONTENT_CHANGE_TYPE_PANE_APPEARED;
+import static android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
 import static com.google.android.accessibility.talkback.Feedback.HINT;
 import static com.google.android.accessibility.utils.AccessibilityWindowInfoUtils.WINDOW_ID_NONE;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
+import android.text.style.LocaleSpan;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
@@ -33,6 +39,7 @@ import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.talkback.compositor.Compositor;
 import com.google.android.accessibility.talkback.eventprocessor.EventState;
 import com.google.android.accessibility.talkback.eventprocessor.ProcessorAccessibilityHints;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.talkback.gesture.GestureShortcutMapping;
 import com.google.android.accessibility.utils.AccessibilityEventListener;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
@@ -46,6 +53,7 @@ import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.PureFunction;
 import com.google.android.accessibility.utils.ReadOnly;
 import com.google.android.accessibility.utils.Role;
+import com.google.android.accessibility.utils.Role.RoleName;
 import com.google.android.accessibility.utils.StringBuilderUtils;
 import com.google.android.accessibility.utils.WindowUtils;
 import com.google.android.accessibility.utils.input.WindowEventInterpreter;
@@ -60,6 +68,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -87,7 +96,7 @@ public class ScreenFeedbackManager
 
   /** Event types that are handled by ScreenFeedbackManager. */
   private static final int MASK_EVENTS_HANDLED_BY_SCREEN_FEEDBACK_MANAGER =
-      AccessibilityEvent.TYPE_WINDOWS_CHANGED | AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
+      AccessibilityEvent.TYPE_WINDOWS_CHANGED | TYPE_WINDOW_STATE_CHANGED;
 
   private final WindowEventInterpreter interpreter;
   private boolean listeningToInterpreter = false;
@@ -232,7 +241,7 @@ public class ScreenFeedbackManager
                 EventState.EVENT_SKIP_WINDOWS_CHANGED_PROCESSING_AFTER_CURSOR_CONTROL)) {
       allowAnnounce = false;
     }
-    if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+    if (event.getEventType() == TYPE_WINDOW_STATE_CHANGED
         && EventState.getInstance()
             .checkAndClearRecentFlag(
                 EventState.EVENT_SKIP_WINDOW_STATE_CHANGED_PROCESSING_AFTER_CURSOR_CONTROL)) {
@@ -249,6 +258,12 @@ public class ScreenFeedbackManager
       return false;
     }
 
+    // Dialog opened events should be read regardless of whether the windows are stable.
+    if (FeatureFlagReader.enableSpeakDialogContent(service)
+        && interpretation.isWebDialogOpenedEvent()) {
+      return interpretation.isAllowAnnounce();
+    }
+
     // For original event, perform some state & UI actions, even if windows are unstable.
     if (interpretation.isOriginalEvent()) {
       if (!interpretation.isAllowAnnounce()) {
@@ -258,6 +273,14 @@ public class ScreenFeedbackManager
 
     // Only speak if windows are stable and the event allows announcement.
     return interpretation.areWindowsStable() && interpretation.isAllowAnnounce();
+  }
+
+  private static Resources getLocalizedResources(Context context, Locale desiredLocale) {
+    Configuration conf = context.getResources().getConfiguration();
+    conf = new Configuration(conf);
+    conf.setLocale(desiredLocale);
+    Context localizedContext = context.createConfigurationContext(conf);
+    return localizedContext.getResources();
   }
 
   /** Inner class used for speech feedback generation. */
@@ -310,14 +333,26 @@ public class ScreenFeedbackManager
       // Compose feedback for IME window
       if (interpretation.getShouldAnnounceInputMethodChange()) {
         logCompose(logDepth, "composeFeedback", "input method");
-        String inputMethodFeedback;
+        CharSequence inputMethodFeedback;
         if (interpretation.getInputMethod().getId() == WINDOW_ID_NONE) {
           inputMethodFeedback = service.getString(R.string.hide_keyboard_window);
         } else {
-          inputMethodFeedback =
-              service.getString(
-                  R.string.show_keyboard_window,
-                  interpretation.getInputMethod().getTitleForFeedback());
+          // Keyboard title may contain LocaleSpan. Try to get the whole string in the same language
+          // and set the LocaleSpan back to the whole string, so TTS can speak the whole string
+          // without chunking by the specified language.
+          CharSequence title = interpretation.getInputMethod().getTitleForFeedback();
+          SpannableString titleSpannable = new SpannableString(title);
+          LocaleSpan[] localeSpans =
+              titleSpannable.getSpans(0, titleSpannable.length(), LocaleSpan.class);
+          if (localeSpans.length > 0) {
+            Resources resources = getLocalizedResources(service, localeSpans[0].getLocale());
+            inputMethodFeedback = resources.getString(R.string.show_keyboard_window, title);
+            SpannableString feedbackSpannable = new SpannableString(inputMethodFeedback);
+            feedbackSpannable.setSpan(localeSpans[0], 0, feedbackSpannable.length(), 0);
+            inputMethodFeedback = feedbackSpannable;
+          } else {
+            inputMethodFeedback = service.getString(R.string.show_keyboard_window, title);
+          }
         }
         feedback.addPart(
             new FeedbackPart(inputMethodFeedback)
@@ -328,13 +363,18 @@ public class ScreenFeedbackManager
       // Generate spoken feedback for main window changes.
       CharSequence utterance = "";
       CharSequence hint = null;
-      if (interpretation.getMainWindowsChanged()) {
-        if (interpretation.getAccessibilityOverlay().getId() != WINDOW_ID_NONE) {
-          logCompose(logDepth, "composeFeedback", "accessibility overlay");
-          // Case where accessibility overlay is shown. Use separated logic for accessibility
-          // overlay not to say out of split screen mode, e.g. accessibility overlay is shown when
-          // user is in split screen mode.
-          utterance = interpretation.getAccessibilityOverlay().getTitleForFeedback();
+
+      if (FeatureFlagReader.enableSpeakDialogContent(service)
+          && interpretation.isWebDialogOpenedEvent()) {
+        logCompose(logDepth, "composeFeedback", "dialog opened");
+        // Generate spoken feedback for dialog window appearance. Note that this logic is in a
+        // separate if-statement block to ensure that the dialog title is not announced again if the
+        // dialog content is already being announced.
+        utterance = getPaneDialogUtterance(interpretation);
+      } else if (interpretation.getMainWindowsChanged()) {
+        if (interpretation.getOtherActiveWindow().getId() != WINDOW_ID_NONE) {
+          logCompose(logDepth, "composeFeedback", "other active window");
+          utterance = interpretation.getOtherActiveWindow().getTitleForFeedback();
         } else if (interpretation.getWindowA().getId() != WINDOW_ID_NONE) {
           if (interpretation.getWindowB().getId() == WINDOW_ID_NONE) {
             // Single window mode.
@@ -366,7 +406,7 @@ public class ScreenFeedbackManager
       // Append picture-in-picture window description.
       if ((interpretation.getMainWindowsChanged() || interpretation.getPicInPicChanged())
           && interpretation.getPicInPic().getId() != WINDOW_ID_NONE
-          && interpretation.getAccessibilityOverlay().getId() == WINDOW_ID_NONE) {
+          && interpretation.getOtherActiveWindow().getId() == WINDOW_ID_NONE) {
         logCompose(logDepth, "composeFeedback", "picture-in-picture");
         CharSequence picInPicWindowTitle = interpretation.getPicInPic().getTitleForFeedback();
         if (picInPicWindowTitle == null) {
@@ -379,6 +419,28 @@ public class ScreenFeedbackManager
                 R.string.template_overlay_window,
                 picInPicWindowTitle,
                 logDepth + 1);
+      }
+
+      // In case no announcement is generated, checks the source window of the received event.
+      if (TextUtils.isEmpty(utterance)) {
+        logCompose(logDepth, "composeFeedback", "Event source window");
+        int fromWindowId = interpretation.getEventSourceWindow().getId();
+
+        // For TYPE_WINDOW_STATE_CHANGED events, only announce the accessibility pane title.
+        if (interpretation.getEventType() == TYPE_WINDOW_STATE_CHANGED) {
+          if (interpretation.getContentChangeTypes() == CONTENT_CHANGE_TYPE_PANE_APPEARED) {
+            logCompose(logDepth, "composeFeedback", "Pane appeared");
+            utterance = interpretation.getEventSourceWindow().getTitleForFeedback();
+          }
+        } else {
+          if (interpretation.getWindowChangeTypes() != AccessibilityEvent.WINDOWS_CHANGE_REMOVED
+              && fromWindowId != WINDOW_ID_NONE
+              && interpretation.getEventSourceWindow().idOrTitleChanged()) {
+            logCompose(logDepth, "composeFeedback", "Window changed");
+            // TODO: For window changed events, announce the title from the new window.
+            // utterance = interpretation.getEventSourceWindow().getTitleForFeedback();
+          }
+        }
       }
 
       // Custom the feedback if the composer needs.
@@ -397,8 +459,7 @@ public class ScreenFeedbackManager
     }
 
     private boolean isWakeUpForWear(WindowEventInterpreter.EventInterpretation interpretation) {
-      return FormFactorUtils.getInstance().isAndroidWear()
-          && interpretation.isInterpretFirstTimeWhenWakeUp();
+      return FormFactorUtils.isAndroidWear() && interpretation.isInterpretFirstTimeWhenWakeUp();
     }
 
     private @Nullable FeedbackPart getFeedbackPartUnreadNotificationOnWakeUpIfNecessary() {
@@ -479,6 +540,83 @@ public class ScreenFeedbackManager
                 .forceFeedbackEvenIfMicrophoneActive(true));
       }
       return feedback;
+    }
+
+    /**
+     * Returns the utterance for pane dialog window appearance, reading some or all of the dialog's
+     * content.
+     *
+     * @param interpretation The event interpretation.
+     * @return The utterance for dialog window appearance. If the dialog is an alert dialog, the
+     *     utterance will include all nodes with text in the dialog. Otherwise, the utterance will
+     *     include nodes with text up until the focused node. Returns an empty string if the dialog
+     *     does not have any nodes with text, or if the dialog is not an alert dialog and there is
+     *     no focused node.
+     */
+    private String getPaneDialogUtterance(
+        WindowEventInterpreter.EventInterpretation interpretation) {
+      if (!FeatureFlagReader.enableSpeakDialogContent(service)
+          || !interpretation.isWebDialogOpenedEvent()) {
+        return "";
+      }
+
+      @Nullable AccessibilityNodeInfo eventSourceNode = interpretation.getSourceNode();
+      if (eventSourceNode == null) {
+        return "";
+      }
+
+      Filter<AccessibilityNodeInfoCompat> hasTextFilter =
+          new Filter<AccessibilityNodeInfoCompat>() {
+            @Override
+            public boolean accept(AccessibilityNodeInfoCompat info) {
+              // Skip the dialog node itself to avoid duplicate announcements.
+              @RoleName int role = Role.getRole(info);
+              if (role == Role.ROLE_DIALOG || role == Role.ROLE_ALERT_DIALOG) {
+                return false;
+              }
+              // Return only nodes with text.
+              return !TextUtils.isEmpty(info.getText());
+            }
+          };
+
+      AccessibilityNodeInfoCompat dialogNode = AccessibilityNodeInfoUtils.toCompat(eventSourceNode);
+      @RoleName int dialogRole = Role.getRole(dialogNode);
+      List<AccessibilityNodeInfoCompat> childrenWithText = new ArrayList<>();
+      switch (dialogRole) {
+        case Role.ROLE_DIALOG -> {
+          // For non-alert dialogs, announce content up until the focused node.
+          if (focusFinder == null) {
+            return "";
+          }
+          @Nullable AccessibilityNodeInfoCompat focusedNode =
+              focusFinder.findFocusCompat(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+          childrenWithText =
+              AccessibilityNodeInfoUtils.getMatchingDescendantsOrRootUntilNode(
+                  dialogNode, hasTextFilter, /* stopNode= */ focusedNode);
+        }
+        case Role.ROLE_ALERT_DIALOG ->
+            // For alert dialogs, announce all content in the dialog.
+            childrenWithText =
+                AccessibilityNodeInfoUtils.getMatchingDescendantsOrRoot(dialogNode, hasTextFilter);
+        default ->
+            // Checking for isDialogOpenedEvent() should prevent this from happening.
+            throw new IllegalStateException("Unexpected dialog role: " + dialogRole);
+      }
+
+      if (childrenWithText == null) {
+        return "";
+      }
+
+      SpannableStringBuilder dialogContent = new SpannableStringBuilder();
+      for (AccessibilityNodeInfoCompat child : childrenWithText) {
+        StringBuilderUtils.appendWithSeparator(dialogContent, child.getText());
+      }
+
+      if (dialogContent.length() > 0) {
+        return dialogContent.toString();
+      }
+
+      return "";
     }
   }
 

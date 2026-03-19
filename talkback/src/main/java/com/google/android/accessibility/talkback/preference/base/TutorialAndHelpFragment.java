@@ -39,7 +39,7 @@ public class TutorialAndHelpFragment extends TalkbackBaseFragment {
 
   @Override
   public CharSequence getTitle() {
-    if (FormFactorUtils.getInstance().isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv()) {
       return getString(
           TvTutorialInitiator.shouldShowTraining(VendorConfigReader.retrieveConfig(getActivity()))
               ? R.string.title_pref_category_tutorial
@@ -89,7 +89,7 @@ public class TutorialAndHelpFragment extends TalkbackBaseFragment {
     // Only wear doesn't support help and feedback
     if (HelpAndFeedbackUtils.supportsHelpAndFeedback(getContext())) {
       pref.setTitle(R.string.title_pref_help_and_feedback);
-      if (FormFactorUtils.getInstance().isAndroidAuto()) {
+      if (FormFactorUtils.isAndroidAuto()) {
         RemoteIntentUtils.assignWebIntentToPreference(this, pref, null);
 
         return;
@@ -101,7 +101,7 @@ public class TutorialAndHelpFragment extends TalkbackBaseFragment {
           });
     } else {
       pref.setTitle(R.string.title_pref_help);
-      if (FormFactorUtils.getInstance().isAndroidTv()) {
+      if (FormFactorUtils.isAndroidTv()) {
         pref.setIntent(new Intent(getContext(), WebActivity.class).setData(Uri.parse(HELP_URL)));
       } else {
         RemoteIntentUtils.assignWebIntentToPreference(this, pref, HELP_URL);

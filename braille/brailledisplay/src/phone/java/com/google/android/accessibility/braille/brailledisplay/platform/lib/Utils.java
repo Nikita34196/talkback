@@ -16,7 +16,6 @@
 
 package com.google.android.accessibility.braille.brailledisplay.platform.lib;
 
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -24,7 +23,6 @@ import android.net.Uri;
 import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
-import android.view.accessibility.AccessibilityManager;
 import androidx.annotation.Nullable;
 import com.google.android.accessibility.utils.PreferenceSettingsUtils;
 import java.util.List;
@@ -125,27 +123,6 @@ public class Utils {
       result[i] = list.remove(0);
     }
     return result;
-  }
-
-  /** Returns if accessibility service is enabled. */
-  // TODO: use existing Utils class for the his method
-  public static boolean isAccessibilityServiceEnabled(Context context, String packageName) {
-    @Nullable
-    AccessibilityManager manager =
-        (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);
-    if (manager == null) {
-      return false;
-    }
-    List<AccessibilityServiceInfo> list =
-        manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
-    if (list != null) {
-      for (AccessibilityServiceInfo serviceInfo : list) {
-        if (serviceInfo.getId().contains(packageName)) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   // Requires SDK_INT >= KITKAT

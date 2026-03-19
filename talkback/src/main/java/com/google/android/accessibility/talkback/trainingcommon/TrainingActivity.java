@@ -29,6 +29,7 @@ import static com.google.android.accessibility.talkback.analytics.TalkBackAnalyt
 import static com.google.android.accessibility.talkback.ipc.IpcService.EXTRA_TRAINING_PAGE_ID;
 import static com.google.android.accessibility.talkback.ipc.IpcService.MSG_DOWNLOAD_ICON_DETECTION;
 import static com.google.android.accessibility.talkback.ipc.IpcService.MSG_DOWNLOAD_IMAGE_DESCRIPTION;
+import static com.google.android.accessibility.talkback.ipc.IpcService.MSG_NOTIFY_HAS_TRAINING_BANNER;
 import static com.google.android.accessibility.talkback.ipc.IpcService.MSG_REQUEST_AVAILABLE_FEATURES;
 import static com.google.android.accessibility.talkback.ipc.IpcService.MSG_REQUEST_DISABLE_TALKBACK;
 import static com.google.android.accessibility.talkback.ipc.IpcService.MSG_REQUEST_GESTURES;
@@ -42,6 +43,7 @@ import static com.google.android.accessibility.talkback.trainingcommon.TrainingC
 import static com.google.android.accessibility.talkback.trainingcommon.TrainingMetricStore.Type.ONBOARDING;
 import static com.google.android.accessibility.talkback.trainingcommon.TrainingMetricStore.Type.TUTORIAL;
 import static com.google.android.accessibility.utils.AccessibilityServiceCompatUtils.Constants.TALKBACK_SERVICE;
+import static com.google.android.accessibility.utils.AccessibilityServiceCompatUtils.Constants.TALKBACK_SERVICE_FOR_INSTRUMENT_TEST;
 import static com.google.android.accessibility.utils.PackageManagerUtils.TALKBACK_PACKAGE;
 
 import android.content.BroadcastReceiver;
@@ -57,14 +59,12 @@ import android.os.Message;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentTransaction;
 import android.util.Pair;
-import android.view.LayoutInflater;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toolbar;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
@@ -79,6 +79,7 @@ import com.google.android.accessibility.talkback.ipc.IpcService;
 import com.google.android.accessibility.talkback.trainingcommon.NavigationButtonBar.NavigationListener;
 import com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId;
 import com.google.android.accessibility.talkback.trainingcommon.PageController.OnPageChangeCallback;
+import com.google.android.accessibility.talkback.trainingcommon.TrainingActivityInterfaceInjector.TrainingSectionLogger;
 import com.google.android.accessibility.talkback.trainingcommon.TrainingConfig.TrainingId;
 import com.google.android.accessibility.talkback.trainingcommon.TrainingIpcClient.IpcServerStateListener;
 import com.google.android.accessibility.utils.AccessibilityServiceCompatUtils;
@@ -117,7 +118,6 @@ public class TrainingActivity extends FragmentActivity
   private PageController pageController;
   private NavigationController navigationController;
   @Nullable private TrainingIpcClient ipcClient;
-  private final FormFactorUtils formFactorUtils = FormFactorUtils.getInstance();
 
   private TrainingMetricStore metricStore;
 
@@ -126,6 +126,7 @@ public class TrainingActivity extends FragmentActivity
 
   private final TrainingActivityInterfaceInjector trainingActivityInterfaceInjector =
       TrainingActivityInterfaceInjector.getInstance();
+  private TrainingSectionLogger trainingSectionLogger;
 
   private TalkBackEnabledReceiver talkBackEnabledReceiver;
   private boolean talkbackEnabledReceiverRegistered;
@@ -238,10 +239,6 @@ public class TrainingActivity extends FragmentActivity
     }
   }
 
-  public TrainingFragment getCurrentTrainingFragment() {
-    return (TrainingFragment) getSupportFragmentManager().findFragmentById(ROOT_RES_ID);
-  }
-
   private void finishOnComplete() {
     notifyTrainingFinishByUser();
     setResult(RESULT_OK);
@@ -279,14 +276,21 @@ public class TrainingActivity extends FragmentActivity
   private void prepareAnalytics() {
     metricStore = new TrainingMetricStore(this, isOnboarding() ? ONBOARDING : TUTORIAL);
     trainingLogged = false;
+    trainingSectionLogger =
+        trainingActivityInterfaceInjector.provideTrainingSectionLogger(metricStore);
   }
 
+  // TODO: Move specific handset logging logic in TrainingActivity#logEnterPages to
+  //  TrainingSectionLoggerImpl in overlay/handset.
   private void logEnterPages(TrainingConfig trainingConfig, int pageNumber) {
-    FormFactorUtils formFactorUtils = FormFactorUtils.getInstance();
-    if (formFactorUtils.isAndroidAuto()
-        || formFactorUtils.isAndroidTv()
-        || formFactorUtils.isAndroidWear()) {
-      // Currently count only mobile phone device's metric.
+    if (FormFactorUtils.isAndroidAuto() || FormFactorUtils.isAndroidTv()) {
+      // TODO: After fixing b/350867398, we could remove the wrapped condition.
+      return;
+    }
+    if (FormFactorUtils.isAndroidWear()) {
+      if (trainingSectionLogger != null) {
+        trainingSectionLogger.logEnterSection(trainingConfig, training.getPages().get(pageNumber));
+      }
       return;
     }
     if (!docPageToMetric.containsKey(trainingConfig.getName())) {
@@ -295,13 +299,13 @@ public class TrainingActivity extends FragmentActivity
     @TrainingSectionId int logEvent;
     logEvent = docPageToMetric.get(trainingConfig.getName());
     switch (logEvent) {
-      case TRAINING_SECTION_ONBOARDING:
+      case TRAINING_SECTION_ONBOARDING -> {
         if (trainingLogged) {
           return;
         }
         trainingLogged = true;
-        break;
-      case TRAINING_SECTION_TUTORIAL:
+      }
+      case TRAINING_SECTION_TUTORIAL -> {
         PageConfig pageConfig = training.getPages().get(pageNumber);
         if (!docPageToMetric.containsKey(pageConfig.getPageNameResId())) {
           return;
@@ -329,9 +333,10 @@ public class TrainingActivity extends FragmentActivity
             return;
         }
         trainingLogged = true;
-        break;
-      default:
+      }
+      default -> {
         return;
+      }
     }
     metricStore.onTutorialEntered(logEvent);
   }
@@ -371,13 +376,13 @@ public class TrainingActivity extends FragmentActivity
     }
 
     // Announces page title to notify the page is changed.
-    if (!formFactorUtils.isAndroidTv()) {
+    if (!FormFactorUtils.isAndroidTv()) {
       String pageTitle = targetPage.getPageNameFromStringOrRes(this);
       setWindowTitle(pageTitle);
     }
 
     // On TV, display an image if one is defined for current page.
-    if (formFactorUtils.isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv()) {
       ExternalDrawableResource image = targetPage.getImage();
       ImageView imageView = findViewById(R.id.tv_training_image);
       if (image != null) {
@@ -435,11 +440,8 @@ public class TrainingActivity extends FragmentActivity
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    prepareAnalytics();
-    initialize(getIntent());
-    talkBackEnabledReceiver = new TalkBackEnabledReceiver(() -> ipcClient.bindService());
-    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+    prepareAnalytics();
     if (savedInstanceState == null) {
       getOnBackPressedDispatcher()
           .addCallback(
@@ -452,6 +454,15 @@ public class TrainingActivity extends FragmentActivity
                 }
               });
     }
+
+    initialize(getIntent());
+    talkBackEnabledReceiver =
+        new TalkBackEnabledReceiver(
+            () -> {
+              ipcClient.bindService();
+              requestAvailableFeatures();
+            });
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
   }
 
   @Override
@@ -489,7 +500,7 @@ public class TrainingActivity extends FragmentActivity
   }
 
   View wrapWithSwipeHandler(View root) {
-    if (formFactorUtils.isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       return WrapSwipeDismissLayoutHelper.wrapSwipeDismissLayout(this, root, navigationController);
     } else {
       return root;
@@ -505,9 +516,8 @@ public class TrainingActivity extends FragmentActivity
   public static Intent createTrainingIntent(
       Context context, TrainingId training, boolean showExitBanner) {
     Intent intent = new Intent(context, TrainingActivity.class);
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-    if (FormFactorUtils.getInstance().isAndroidWear()) {
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+    if (FormFactorUtils.isAndroidWear()) {
       // Wear platform prefers to not push AAS to the recent.
       intent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
     }
@@ -531,9 +541,11 @@ public class TrainingActivity extends FragmentActivity
     return currentPage == null ? null : currentPage.getPageId();
   }
 
-  private static boolean isTalkBackEnabled(Context context) {
+  public static boolean isTalkBackEnabled(Context context) {
     return AccessibilityServiceCompatUtils.isAccessibilityServiceEnabled(
-        context, TALKBACK_SERVICE.flattenToShortString());
+            context, TALKBACK_SERVICE.flattenToShortString())
+        || AccessibilityServiceCompatUtils.isAccessibilityServiceEnabled(
+            context, TALKBACK_SERVICE_FOR_INSTRUMENT_TEST.flattenToShortString());
   }
 
   /** Passes the current page ID to TalkBack. */
@@ -576,15 +588,23 @@ public class TrainingActivity extends FragmentActivity
   /** Sends a message to {@link IpcService} or throws exception. */
   public void checkAndSendMessageToService(Message message) {
     switch (message.what) {
-      case MSG_DOWNLOAD_ICON_DETECTION: // fall-through
-      case MSG_DOWNLOAD_IMAGE_DESCRIPTION:
-        {
-          sendMessageToService(message);
-          return;
-        }
-      default:
-        throw new IllegalArgumentException(String.format("Unknown message. what=%s", message.what));
+      case MSG_DOWNLOAD_ICON_DETECTION, MSG_DOWNLOAD_IMAGE_DESCRIPTION -> {
+        sendMessageToService(message);
+        return;
+      }
+      default ->
+          throw new IllegalArgumentException(
+              String.format("Unknown message. what=%s", message.what));
     }
+  }
+
+  /** Notifies TalkBack it has TalkBack-exit banner in training. */
+  private void notifyHasTrainingBanner(boolean hasTrainingBanner) {
+    Message message = Message.obtain(null, MSG_NOTIFY_HAS_TRAINING_BANNER);
+    Bundle data = new Bundle();
+    data.putSerializable(EXTRA_TRAINING_SHOW_EXIT_BANNER, hasTrainingBanner);
+    message.setData(data);
+    sendMessageToService(message);
   }
 
   /** Initializes activity. */
@@ -614,6 +634,7 @@ public class TrainingActivity extends FragmentActivity
               showExitBanner,
               () -> {
                 passPageIdToService(getCurrentPageId());
+                notifyHasTrainingBanner(showExitBanner);
                 requestGesturesFromService();
                 requestAvailableFeatures();
                 unregisterTalkBackEnabledReceiver();
@@ -632,13 +653,17 @@ public class TrainingActivity extends FragmentActivity
 
   @Nullable
   protected TrainingConfig getTrainingFromIntent(Intent intent) {
-    // The TV tutorial may be invoked by an intent from the outside, which does not contain an
-    // extra with the TrainingId. Since there is only one training on TV, there is no doubt on
-    // which training should be started. For Non-TV, no training must be started from the outside.
+    // The TV and XR tutorials may be invoked by an intent from the outside, which do not contain
+    // extras with the TrainingId. Since there is only one training on those form factors, there is
+    // no doubt on which training should be started. For other form factors, no training must be
+    // started from the outside.
     if (Objects.equals(intent.getAction(), ACTION_START)) {
-      if (formFactorUtils.isAndroidTv()) {
+      if (FormFactorUtils.isAndroidTv()) {
         return trainingActivityInterfaceInjector.getTraining(
             TrainingId.TRAINING_ID_TUTORIAL_FOR_TV, this);
+      } else if (FormFactorUtils.isAndroidXr()) {
+        return trainingActivityInterfaceInjector.getTraining(
+            TrainingId.TRAINING_ID_FIRST_RUN_TUTORIAL, this);
       } else {
         return null;
       }
@@ -737,34 +762,19 @@ public class TrainingActivity extends FragmentActivity
     if (doNotShowAgain) {
       return;
     }
-    LayoutInflater inflater = LayoutInflater.from(this);
-    final View root =
-        inflater.inflate(R.layout.do_not_show_again_checkbox_dialog, /* root= */ null);
-    CheckBox doNotShowAgainCheckBox = root.findViewById(R.id.dont_show_again);
-    doNotShowAgainCheckBox.setText(R.string.do_not_show_again_check_box);
-    doNotShowAgainCheckBox.setOnCheckedChangeListener(
-        (buttonView, isChecked) ->
-            sharedPreferences
-                .edit()
-                .putBoolean(
-                    getString(
-                        R.string.accessibility_tutorial_talkback_is_off_dialog_do_not_show_again),
-                    isChecked)
-                .apply());
-    TextView contentTextView = root.findViewById(R.id.dialog_content);
-    contentTextView.setText(getString(R.string.talkback_inactive_warning_message));
-
-    A11yAlertDialogWrapper.materialDialogBuilder(this, getSupportFragmentManager())
-        .setView(root)
-        .setTitle(R.string.talkback_inactive_title)
-        .setCancelable(true)
-        .setNegativeButton(
-            R.string.talkback_inactive_go_to_settings_button,
-            (dialog, which) ->
-                startActivity(TrainingUtils.getAccessibilitySettingsAndHighLightTalkBackIntent()))
-        .setPositiveButton(R.string.talkback_inactive_warning_positive_button, null)
-        .create()
-        .show();
+    trainingActivityInterfaceInjector
+        .provideTalkBackDisabledWarmingDialog()
+        .show(
+            this,
+            checked ->
+                sharedPreferences
+                    .edit()
+                    .putBoolean(
+                        getString(
+                            R.string
+                                .accessibility_tutorial_talkback_is_off_dialog_do_not_show_again),
+                        checked)
+                    .apply());
   }
 
   private void showExitDialog() {
@@ -817,6 +827,36 @@ public class TrainingActivity extends FragmentActivity
       navigationBarContainer.removeView(navigationButtonBar);
       navigationButtonBar = null;
     }
+  }
+
+  @Override
+  public boolean dispatchKeyEvent(KeyEvent event) {
+    if (consumeKeyEventForPracticeKeyboardPage(event)) {
+      return true;
+    }
+    return super.dispatchKeyEvent(event);
+  }
+
+  private boolean consumeKeyEventForPracticeKeyboardPage(KeyEvent event) {
+    // Only the practice keyboard gestures training page supports the keyboard exits.
+    if (getCurrentPageId() != PageId.PAGE_ID_PRACTICE_KEYBOARD_GESTURES) {
+      return false;
+    }
+
+    boolean isEscapeKey =
+        event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE && event.getMetaState() == 0;
+    boolean isControlWKey =
+        event.getKeyCode() == KeyEvent.KEYCODE_W
+            && (event.getMetaState() & KeyEvent.META_CTRL_ON) != 0;
+
+    // Attempt to go back to the previous page. If it fails, show the exit dialog.
+    if (isEscapeKey || isControlWKey) {
+      if (!goBackPreviousPage() && event.getAction() == KeyEvent.ACTION_DOWN) {
+        showExitDialog();
+      }
+      return true;
+    }
+    return false;
   }
 
   /**

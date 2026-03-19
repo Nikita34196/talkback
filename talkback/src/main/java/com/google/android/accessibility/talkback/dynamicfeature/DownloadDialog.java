@@ -69,8 +69,7 @@ public abstract class DownloadDialog extends BaseDialog {
 
   @SuppressLint("InflateParams")
   @Override
-  public View getCustomizedView() {
-    LayoutInflater inflater = LayoutInflater.from(context);
+  public View getCustomizedView(LayoutInflater inflater) {
     final ScrollView root =
         (ScrollView) inflater.inflate(R.layout.confirm_download_dialog, /* root= */ null);
 

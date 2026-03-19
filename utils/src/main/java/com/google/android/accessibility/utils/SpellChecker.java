@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -108,6 +109,31 @@ public class SpellChecker {
   public static CharSequence getTextWithSuggestionSpans(
       Context context, AccessibilityNodeInfoCompat node) {
     return getTextWithSuggestionSpans(context, node.getText());
+  }
+
+  /** Dumps all {@link SuggestionSpan} within the given text. */
+  public static void dumpSuggestionSpans(AccessibilityNodeInfoCompat node, CharSequence text) {
+    if (TextUtils.isEmpty(text) || !(text instanceof Spannable)) {
+      LogUtils.v(TAG, "No SuggestionSpan.");
+      return;
+    }
+
+    int cursorStartPosition = node.getTextSelectionStart();
+    int cursorEndPosition = node.getTextSelectionEnd();
+    LogUtils.v(TAG, "cursor position=[%d-%d]", cursorStartPosition, cursorEndPosition);
+    Spanned spanned = (Spanned) text;
+    SuggestionSpan[] suggestionSpans = spanned.getSpans(0, spanned.length(), SuggestionSpan.class);
+    for (SuggestionSpan suggestionSpan : suggestionSpans) {
+      int start = spanned.getSpanStart(suggestionSpan);
+      int end = spanned.getSpanEnd(suggestionSpan);
+      LogUtils.v(
+          TAG,
+          "%s[%d-%d] suggestion=%s",
+          spanned.subSequence(start, end),
+          start,
+          end,
+          Arrays.toString(suggestionSpan.getSuggestions()));
+    }
   }
 
   /**
@@ -421,12 +447,18 @@ public class SpellChecker {
     @Override
     public void onGetSentenceSuggestions(SentenceSuggestionsInfo[] results) {
       LogUtils.v(TAG, "onGetSentenceSuggestions");
-      if (results == null) {
+      SentenceSuggestionsInfo[] filteredResults =
+          results == null
+              ? null
+              : Arrays.stream(results)
+                  .filter(Objects::nonNull)
+                  .toArray(SentenceSuggestionsInfo[]::new);
+      if (filteredResults == null || filteredResults.length == 0) {
         onFinished(ImmutableList.of());
         return;
       }
-      dumpSuggestionsInfos(results);
-      onFinished(ImmutableList.copyOf(results));
+      dumpSuggestionsInfos(filteredResults);
+      onFinished(ImmutableList.copyOf(filteredResults));
     }
 
     private void setResult(ImmutableList<SentenceSuggestionsInfo> results) {
@@ -448,9 +480,7 @@ public class SpellChecker {
         return;
       }
       for (SentenceSuggestionsInfo sentenceSuggestionsInfo : results) {
-        if (sentenceSuggestionsInfo == null) {
-          continue;
-        }
+        LogUtils.v(TAG, "getSuggestionsCount=%d", sentenceSuggestionsInfo.getSuggestionsCount());
         for (int i = 0; i < sentenceSuggestionsInfo.getSuggestionsCount(); i++) {
           SuggestionsInfo suggestionsInfo = sentenceSuggestionsInfo.getSuggestionsInfoAt(i);
           if ((suggestionsInfo.getSuggestionsAttributes() & RESULT_ATTR_IN_THE_DICTIONARY) != 0) {

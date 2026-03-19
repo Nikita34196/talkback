@@ -19,6 +19,7 @@ package com.google.android.accessibility.talkback.menurules;
 import static android.text.style.SuggestionSpan.FLAG_GRAMMAR_ERROR;
 import static com.google.android.accessibility.talkback.Feedback.EditText.Action.TYPO_CORRECTION;
 import static com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED;
+import static com.google.android.accessibility.utils.input.TextCursorTracker.NO_POSITION;
 
 import android.content.Context;
 import android.text.BidiFormatter;
@@ -30,6 +31,7 @@ import android.text.style.TtsSpan;
 import android.view.Menu;
 import androidx.annotation.Nullable;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import com.google.android.accessibility.talkback.ActorState;
 import com.google.android.accessibility.talkback.Feedback;
 import com.google.android.accessibility.talkback.Pipeline;
 import com.google.android.accessibility.talkback.R;
@@ -51,6 +53,7 @@ public class TypoSuggestionMenu implements NodeMenu {
 
   private static final String TAG = "RuleTypoSuggestions";
   private final Pipeline.FeedbackReturner pipeline;
+  private final ActorState actorState;
   private final AccessibilityFocusMonitor accessibilityFocusMonitor;
 
   /**
@@ -58,12 +61,16 @@ public class TypoSuggestionMenu implements NodeMenu {
    *
    * @param pipeline Handles {@link com.google.android.accessibility.talkback.Feedback.Speech}
    *     feedbacks.
+   * @param actorState Uses to get the current cursor position from the text cursor tracker.
    * @param accessibilityFocusMonitor Getting the current accessibility focus or editing node if the
    *     focus is on an IME window.
    */
   public TypoSuggestionMenu(
-      Pipeline.FeedbackReturner pipeline, AccessibilityFocusMonitor accessibilityFocusMonitor) {
+      Pipeline.FeedbackReturner pipeline,
+      ActorState actorState,
+      AccessibilityFocusMonitor accessibilityFocusMonitor) {
     this.pipeline = pipeline;
+    this.actorState = actorState;
     this.accessibilityFocusMonitor = accessibilityFocusMonitor;
   }
 
@@ -85,7 +92,13 @@ public class TypoSuggestionMenu implements NodeMenu {
     if (Role.getRole(editingNode) != Role.ROLE_EDIT_TEXT) {
       return false;
     }
-    return !AccessibilityNodeInfoUtils.getSpellingSuggestions(context, editingNode).isEmpty();
+
+    int currentCursorPosition = actorState.getEditState().getCurrentCursorPosition();
+    return currentCursorPosition == NO_POSITION
+        ? !AccessibilityNodeInfoUtils.getSpellingSuggestions(context, editingNode).isEmpty()
+        : !AccessibilityNodeInfoUtils.getSpellingSuggestions(
+                context, editingNode, currentCursorPosition)
+            .isEmpty();
   }
 
   @Override
@@ -94,7 +107,9 @@ public class TypoSuggestionMenu implements NodeMenu {
     List<ContextMenuItem> suggestionItems = new ArrayList<>();
 
     AccessibilityNodeInfoCompat editingNode = getEditingNode(node);
-    SpellingSuggestion targetSpellingSuggestion = getTargetSpellingSuggestion(context, editingNode);
+    SpellingSuggestion targetSpellingSuggestion =
+        getTargetSpellingSuggestion(
+            context, editingNode, actorState.getEditState().getCurrentCursorPosition());
     if (targetSpellingSuggestion == null) {
       return suggestionItems;
     }
@@ -174,7 +189,7 @@ public class TypoSuggestionMenu implements NodeMenu {
 
   @Nullable
   private static SpellingSuggestion getTargetSpellingSuggestion(
-      Context context, @Nullable AccessibilityNodeInfoCompat node) {
+      Context context, @Nullable AccessibilityNodeInfoCompat node, int currentCursorPosition) {
     if (node == null) {
       return null;
     }
@@ -186,7 +201,10 @@ public class TypoSuggestionMenu implements NodeMenu {
     }
 
     List<SpellingSuggestion> spellingSuggestions =
-        AccessibilityNodeInfoUtils.getSpellingSuggestions(context, node);
+        currentCursorPosition == NO_POSITION
+            ? AccessibilityNodeInfoUtils.getSpellingSuggestions(context, node)
+            : AccessibilityNodeInfoUtils.getSpellingSuggestions(
+                context, node, currentCursorPosition);
 
     return spellingSuggestions.isEmpty() ? null : spellingSuggestions.get(0);
   }

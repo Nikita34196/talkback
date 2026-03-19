@@ -54,7 +54,7 @@
   <string name="voice_commands_Spell">Hláskovat</string>
   <string name="voice_commands_talkback_settings">Nastavení funkce TalkBack</string>
   <string name="voice_commands_talkback_setting">Nastavení funkce TalkBack</string>
-  <string name="voice_commands_screen_search">Přímé vyhledávání</string>
+  <string name="voice_commands_screen_search">Vyhledávání na obrazovce</string>
   <string name="voice_commands_search_on_screen">Vyhledat na obrazovce</string>
   <string name="voice_commands_copy">@android:string/copy</string>
   <string name="voice_commands_cut">@android:string/cut</string>
@@ -62,9 +62,9 @@
   <string name="voice_commands_paste">@android:string/paste</string>
   <string name="voice_commands_notification">Oznámení</string>
   <string name="voice_commands_notifications">Oznámení</string>
-  <string name="voice_commands_verbosity_parameter">Výřečnost %s</string>
-  <string name="voice_commands_parameter_verbosity">%s výřečnost</string>
-  <string name="voice_commands_change_verbosity_to_parameter">Změnit výřečnost na %s</string>
+  <string name="voice_commands_verbosity_parameter">Míra popisnosti %s</string>
+  <string name="voice_commands_parameter_verbosity">%s míra popisnosti</string>
+  <string name="voice_commands_change_verbosity_to_parameter">Změnit míru popisnosti na %s</string>
   <string name="voice_commands_navigation_by_parameter">Navigace po %s</string>
   <string name="voice_commands_parameter_navigation">Navigace %s</string>
   <string name="voice_commands_parameter_granularity">Úroveň podrobnosti %s</string>
@@ -107,7 +107,7 @@
   <string name="voice_commands_help_next">Další [nadpis]</string>
   <string name="voice_commands_help_navigation">Navigace po [slovech]</string>
   <string name="voice_commands_help_speech_rate">Mluv [rychleji]</string>
-  <string name="voice_commands_help_verbosity">[Nižší] výřečnost</string>
+  <string name="voice_commands_help_verbosity">[Nižší] míra popisnosti</string>
   <string name="voice_commands_help_next_description">Přechod na další nadpis, ovládací prvek, seznam nebo orientační bod</string>
   <string name="voice_commands_help_navigation_description">Navigace po slovech, znacích, řádcích, odstavcích, nadpisech, ovládacích prvcích apod.</string>
   <string name="voice_commands_help_speech_rate_description">Můžete také říct „mluv pomaleji“</string>

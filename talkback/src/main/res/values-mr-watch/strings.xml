@@ -7,7 +7,5 @@
   <string name="talkback_updated_notification_content">तपशिलांसाठी TalkBack उघडा</string>
   <string name="new_feature_in_talkback_title">नवीन काय आहे</string>
   <string name="reset_button_in_reset_gesture_settings_confirm_dialog">ओके</string>
-  <string name="scan_the_qr_code">QR कोड स्कॅन करा</string>
-  <string name="alternate_privacy_policy">किंवा http://www.google.com/policies/privacy ला भेट द्या</string>
-  <string name="alternate_tos">किंवा https://www.google.com/mobile/toscountry ला भेट द्या</string>
+  <string name="turn_off_talkback">बंद करा</string>
 </resources>

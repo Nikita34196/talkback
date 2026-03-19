@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -136,8 +136,8 @@ extern STR_DECLARE_FORMATTER(formatBrailleTime, const TimeFormattingData *fmt);
 
 extern int isContracted;
 extern int contractedTrack;
-extern BrailleRowDescriptor *getBrailleRowDescriptor(unsigned int row);
-extern int getCursorOffsetForContracting(void);
+extern BrailleRowDescriptor *getBrailleRowDescriptor (unsigned int row);
+extern int getCursorOffsetForContracting (void);
 
 extern int isContracting (void);
 extern int getContractedLength (unsigned int outputLimit);
@@ -150,7 +150,7 @@ extern ProgramExitStatus brlttyPrepare (int argc, char *argv[]);
 extern ProgramExitStatus brlttyStart (void);
 
 extern void setPreferences (const PreferenceSettings *newPreferences);
-extern int loadPreferences(int reset);
+extern int loadPreferences (int reset);
 extern int savePreferences (void);
 
 extern unsigned char getCursorDots (const unsigned char *setting);
@@ -164,7 +164,7 @@ extern unsigned char getSpeechCursorDots (void);
 extern int setSpeechCursorDots (unsigned char dots);
 
 extern BrailleDisplay brl;			/* braille driver reference */
-extern int haveBrailleDisplay(void);
+extern int haveBrailleDisplay (void);
 
 extern unsigned int textStart;
 extern unsigned int textCount;
@@ -198,7 +198,7 @@ extern int isAllSpaceCharacters (const ScreenCharacter *characters, int count);
 
 #ifdef ENABLE_SPEECH_SUPPORT
 extern SpeechSynthesizer spk;
-extern int haveSpeechSynthesizer(void);
+extern int haveSpeechSynthesizer (void);
 extern int opt_quietIfNoBraille;
 
 extern int isAutospeakActive (void);

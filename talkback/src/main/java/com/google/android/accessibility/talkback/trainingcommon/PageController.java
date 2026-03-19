@@ -58,6 +58,7 @@ public class PageController {
   private final ServiceData serviceData;
   private int currentPageNumber = UNKNOWN_PAGE_NUMBER;
   @Nullable private SectionInfo sectionInfo;
+  @Nullable private Pair<Integer, Integer> shownPageNumber;
 
   private NavigationListener navigationListener;
 
@@ -104,8 +105,9 @@ public class PageController {
     if (pageConfig != null) {
       metricStore.onTrainingPageEntered(pageConfig.getPageId());
     }
+    shownPageNumber = getShownPageNumber();
     onPageChangeCallback.onPageSwitched(
-        currentPageNumber, getShownPageNumber(), createNavigationBarSupplier());
+        currentPageNumber, shownPageNumber, createNavigationBarSupplier());
   }
 
   public void setNavigationListener(NavigationListener navigationListener) {
@@ -130,18 +132,22 @@ public class PageController {
             isFirstOrOnePage,
             isLastPage(),
             training.isExitButtonOnlyShowOnLastPage(),
-            training.isPrevButtonShownOnFirstPage(),
-            targetPage.getExtraNavigationButtonMarginTop());
+            training.isPrevButtonShownOnFirstPage());
   }
 
   /** Gets the current page's config. */
   @Nullable
   public PageConfig getCurrentPageConfig() {
-    if (training == null || currentPageNumber < 0 || currentPageNumber >= getPageSize()) {
+    return getPageConfig(currentPageNumber);
+  }
+
+  @Nullable
+  public PageConfig getPageConfig(int index) {
+    if (training == null || index < 0 || index >= getPageSize()) {
       return null;
     }
 
-    return training.getPages().get(currentPageNumber);
+    return training.getPages().get(index);
   }
 
   /**
@@ -172,12 +178,16 @@ public class PageController {
     // Gets a total number of pages in the section.
     int totalNumber = 0;
     for (int i = firstAvailablePageNumberInSection; i < pages.size(); i++) {
-      totalNumber++;
-      if (pages.get(i).isEndOfSection()) {
+      PageConfig page = pages.get(i);
+      if (page.showingPredicate().test(serviceData)) {
+        totalNumber++;
+      }
+      if (page.isEndOfSection()) {
         break;
       }
     }
 
+    // TODO: b/437262752 - SectionInfo.totalPageNumber should exclude pages without a page number.
     sectionInfo =
         new SectionInfo(currentPageNumber, firstAvailablePageNumberInSection, totalNumber);
     switchPage(firstAvailablePageNumberInSection);
@@ -197,8 +207,19 @@ public class PageController {
       sectionInfo = null;
       switchPage(indexPageNumber);
     } else {
+      int targetPageNumber = currentPageNumber - 1;
+      while (targetPageNumber < getPageSize()) {
+        PageConfig targetPageConfig = getPageConfig(targetPageNumber);
+        if (targetPageConfig != null && targetPageConfig.showingPredicate().test(serviceData)) {
+          break;
+        }
+        targetPageNumber--;
+      }
+      if (targetPageNumber < 0) {
+        return false;
+      }
       // Goes to the previous page.
-      switchPage(currentPageNumber - 1);
+      switchPage(targetPageNumber);
     }
 
     if (metricStore != null) {
@@ -213,9 +234,19 @@ public class PageController {
     if (isLastPage()) {
       return false;
     }
-
+    int targetPageNumber = currentPageNumber + 1;
+    while (targetPageNumber < getPageSize()) {
+      PageConfig targetPageConfig = getPageConfig(targetPageNumber);
+      if (targetPageConfig != null && targetPageConfig.showingPredicate().test(serviceData)) {
+        break;
+      }
+      targetPageNumber++;
+    }
+    if (targetPageNumber >= getPageSize()) {
+      return false;
+    }
     // Goes to the next page.
-    switchPage(currentPageNumber + 1);
+    switchPage(targetPageNumber);
 
     if (metricStore != null) {
       metricStore.onTutorialEvent(TRAINING_BUTTON_NEXT);
@@ -262,8 +293,8 @@ public class PageController {
   @Nullable
   private Pair<Integer, Integer> getShownPageNumber() {
     PageConfig targetPage = training.getPages().get(currentPageNumber);
-    int pageNumber = currentPageNumber;
-    int totalNumber = training.getTotalPageNumber();
+    int pageNumber = training.getActualCurrentPageNumber(currentPageNumber, serviceData);
+    int totalNumber = training.getTotalShownPageNumber(serviceData);
     if (sectionInfo != null) {
       pageNumber = sectionInfo.getCurrentPageNumberInSection(currentPageNumber);
       totalNumber = sectionInfo.getTotalPageNumberInSection();
@@ -278,19 +309,28 @@ public class PageController {
 
   /** Returns true if the current page is the first page or the first page of the section. */
   public boolean isFirstPage() {
-    return (sectionInfo == null && currentPageNumber == 0)
-        || (sectionInfo != null && sectionInfo.firstPageNumber == currentPageNumber);
+    return shownPageNumber == null
+        ? (sectionInfo == null
+            ? currentPageNumber == 0
+            : sectionInfo.firstPageNumber == currentPageNumber)
+        : (shownPageNumber.first == 1);
   }
 
   /** Returns true if the current page is the last page. */
   public boolean isLastPage() {
-    return (currentPageNumber == getPageSize() - 1)
+    return (shownPageNumber == null
+            ? (currentPageNumber == getPageSize() - 1)
+            : shownPageNumber.first.equals(
+                sectionInfo == null
+                    ? training.getTotalPageNumber(serviceData)
+                    : shownPageNumber.second))
         || training.getPages().get(currentPageNumber).isEndOfSection();
   }
 
   /** Returns true if there is only one page in the training or in a section. */
   public boolean isOnePage() {
-    return getPageSize() == 1 || (sectionInfo != null && sectionInfo.totalPageNumber == 1);
+    return (shownPageNumber == null ? getPageSize() == 1 : shownPageNumber.second == 1)
+        || (sectionInfo != null && sectionInfo.totalPageNumber == 1);
   }
 
   public int getCurrentPageNumber() {

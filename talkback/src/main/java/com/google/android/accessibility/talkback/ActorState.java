@@ -25,8 +25,10 @@ import com.google.android.accessibility.talkback.actor.FullScreenReadActor;
 import com.google.android.accessibility.talkback.actor.LanguageActor;
 import com.google.android.accessibility.talkback.actor.NodeActionPerformer;
 import com.google.android.accessibility.talkback.actor.PassThroughModeActor;
-import com.google.android.accessibility.talkback.actor.SpeechRateActor;
+import com.google.android.accessibility.talkback.actor.SpeechRateAndPitchActor;
+import com.google.android.accessibility.talkback.actor.TextEditActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiActor;
+import com.google.android.accessibility.talkback.actor.search.UniversalSearchActor;
 import com.google.android.accessibility.talkback.focusmanagement.record.AccessibilityFocusActionHistory;
 import com.google.android.accessibility.utils.labeling.LabelManager;
 import com.google.android.accessibility.utils.output.SpeechControllerImpl;
@@ -105,7 +107,7 @@ public final class ActorState {
     return writable.languageState;
   }
 
-  public SpeechRateActor.State getSpeechRateState() {
+  public SpeechRateAndPitchActor.RateState getSpeechRateState() {
     return writable.speechRateState;
   }
 
@@ -119,6 +121,14 @@ public final class ActorState {
 
   public GeminiActor.State getGeminiState() {
     return writable.geminiState;
+  }
+
+  public UniversalSearchActor.State getSearchState() {
+    return writable.searchState;
+  }
+
+  public TextEditActor.State getEditState() {
+    return writable.editState;
   }
 
   //////////////////////////////////////////////////////////////////////////

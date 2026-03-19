@@ -33,10 +33,11 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import com.google.android.accessibility.talkback.FeatureFlagReader;
 import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.actor.DimScreenActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiFunctionUtils;
 import com.google.android.accessibility.talkback.dialog.BaseDialog;
+import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.talkback.imagecaption.ImageCaptionConstants.FeatureSwitchDialogResources;
 import com.google.android.accessibility.utils.SharedPreferencesUtils;
 
@@ -77,8 +78,7 @@ public class FeatureSwitchDialog extends BaseDialog {
 
   @SuppressLint("InflateParams")
   @Override
-  public View getCustomizedView() {
-    LayoutInflater inflater = LayoutInflater.from(context);
+  public View getCustomizedView(LayoutInflater inflater) {
     if (resources.descriptionType == TYPE_DETAILED_DESCRIPTION) {
       final View root =
           inflater.inflate(R.layout.detailed_image_description_dialog, /* root= */ null);
@@ -90,9 +90,10 @@ public class FeatureSwitchDialog extends BaseDialog {
         int spanIndexStart = rawText.indexOf(tos);
         if (spanIndexStart >= 0) {
           text.setSpan(
-              GeminiFunctionUtils.createClickableSpanForGeminiTOS(context, this),
+              GeminiFunctionUtils.createClickableSpanForGeminiTOS(
+                  context, this, DimScreenActor.isDimScreenEnabled(context, prefs)),
               spanIndexStart,
-              rawText.length(),
+              spanIndexStart + tos.length(),
               0);
         }
         textView.setText(text);
@@ -154,15 +155,9 @@ public class FeatureSwitchDialog extends BaseDialog {
     }
 
     switch (ImageCaptionUtils.getAutomaticImageCaptioningState(context, prefs, resources)) {
-      case ON_ALL_IMAGES:
-        enableAlways.setChecked(true);
-        break;
-      case ON_UNLABELLED_ONLY:
-        enableUnlabelledOnly.setChecked(true);
-        break;
-      case OFF:
-        disable.setChecked(true);
-        break;
+      case ON_ALL_IMAGES -> enableAlways.setChecked(true);
+      case ON_UNLABELLED_ONLY -> enableUnlabelledOnly.setChecked(true);
+      case OFF -> disable.setChecked(true);
     }
     return root;
   }
@@ -178,15 +173,15 @@ public class FeatureSwitchDialog extends BaseDialog {
       if (radioBtnId == R.id.automatic_image_caption_switch_dialog_radiobutton_disabled) {
         prefs
             .edit()
-            .putBoolean(context.getString(resources.switchKey), false)
-            .remove(context.getString(resources.switchOnUnlabelledOnlyKey))
+            .putBoolean(context.getString(resources.switchPreferenceKeys.switchKey), false)
+            .remove(context.getString(resources.switchPreferenceKeys.switchOnUnlabelledOnlyKey))
             .apply();
       } else {
         prefs
             .edit()
-            .putBoolean(context.getString(resources.switchKey), true)
+            .putBoolean(context.getString(resources.switchPreferenceKeys.switchKey), true)
             .putBoolean(
-                context.getString(resources.switchOnUnlabelledOnlyKey),
+                context.getString(resources.switchPreferenceKeys.switchOnUnlabelledOnlyKey),
                 radioBtnId
                     == R.id
                         .automatic_image_caption_switch_dialog_radiobutton_enabled_unlabelled_only)

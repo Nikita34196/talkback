@@ -42,7 +42,7 @@ import static com.google.android.accessibility.talkback.Interpretation.VoiceComm
 import static com.google.android.accessibility.talkback.Interpretation.VoiceCommand.Action.VOICE_COMMAND_START_AT_CURSOR;
 import static com.google.android.accessibility.talkback.Interpretation.VoiceCommand.Action.VOICE_COMMAND_START_AT_TOP;
 import static com.google.android.accessibility.talkback.Interpretation.VoiceCommand.Action.VOICE_COMMAND_START_SELECT;
-import static com.google.android.accessibility.talkback.actor.voicecommands.SpeechRecognizerActor.RECOGNITION_SPEECH_DELAY_MS;
+import static com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandActor.RECOGNITION_SPEECH_DELAY_MS;
 import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VOICE_COMMAND_RECOGNIZED;
 import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VOICE_COMMAND_TYPE_ALL_APPS;
 import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VOICE_COMMAND_TYPE_ASSISTANT;
@@ -121,12 +121,13 @@ import com.google.android.accessibility.utils.output.FeedbackItem;
 import com.google.android.accessibility.utils.output.SpeechController.SpeakOptions;
 import com.google.android.accessibility.utils.screencapture.ScreenshotCapture;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.ArrayList;
 import java.util.List;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 // TODO: Refactoring this class as a feedback-mapper class
-/** Class to handle voice commands and calls from {@link SpeechRecognizerActor}. */
+/** Class to handle voice commands and calls from {@link VoiceCommandActor}. */
 public class VoiceCommandProcessor {
 
   private static final String LOG_TAG = "VoiceCommandProcessor";
@@ -237,8 +238,8 @@ public class VoiceCommandProcessor {
     R.string.granularity_word,
     R.string.granularity_line,
     R.string.granularity_paragraph,
-    R.string.granularity_web_heading, // headings
-    R.string.granularity_web_control, // controls
+    R.string.granularity_native_heading, // headings
+    R.string.granularity_native_control, // controls
     R.string.granularity_web_landmark, // landmarks
     R.string.granularity_window,
     R.string.granularity_default
@@ -301,7 +302,8 @@ public class VoiceCommandProcessor {
   }
 
   /* Returns true if the recognized string is one of the voice commands. */
-  public boolean handleSpeechCommand(String command) {
+  @CanIgnoreReturnValue
+  public boolean handleSpeechCommand(String command, boolean isPartialResult) {
     if (TextUtils.isEmpty(command)) {
       return false;
     }
@@ -357,7 +359,7 @@ public class VoiceCommandProcessor {
 
     // screen search voice command
     // command format: screen search, search on screen
-    if (!FormFactorUtils.getInstance().isAndroidWear()
+    if (!FormFactorUtils.isAndroidWear()
         && (equals(command, R.string.voice_commands_screen_search)
             || equals(command, R.string.voice_commands_search_on_screen))) {
       pipeline.returnFeedback(eventId, Feedback.universalSearch(TOGGLE_SEARCH));
@@ -401,12 +403,8 @@ public class VoiceCommandProcessor {
     if (equals(command, R.string.voice_commands_next_heading)) {
       boolean result;
       node = accessibilityFocusMonitor.getAccessibilityFocus(false);
-      boolean isWebElement = WebInterfaceUtils.supportsWebActions(node);
       result =
-          sendInterpretation(
-              VOICE_COMMAND_NEXT_GRANULARITY,
-              isWebElement ? CursorGranularity.WEB_HEADING : null,
-              eventId);
+          sendInterpretation(VOICE_COMMAND_NEXT_GRANULARITY, CursorGranularity.HEADING, eventId);
 
       if (!result) {
         pipeline.returnFeedback(eventId, Feedback.sound(R.raw.complete));
@@ -421,12 +419,8 @@ public class VoiceCommandProcessor {
     // command format: next control
     if (equals(command, R.string.voice_commands_next_control)) {
       node = accessibilityFocusMonitor.getAccessibilityFocus(false);
-      boolean isWebElement = WebInterfaceUtils.supportsWebActions(node);
 
-      if (!sendInterpretation(
-          VOICE_COMMAND_NEXT_GRANULARITY,
-          isWebElement ? CursorGranularity.WEB_CONTROL : CursorGranularity.CONTROL,
-          eventId)) {
+      if (!sendInterpretation(VOICE_COMMAND_NEXT_GRANULARITY, CursorGranularity.CONTROL, eventId)) {
         pipeline.returnFeedback(eventId, Feedback.sound(R.raw.complete));
         speakDelayed(service.getString(R.string.voice_commands_no_next_control_feedback));
       }
@@ -438,12 +432,8 @@ public class VoiceCommandProcessor {
     // command format: next link
     if (equals(command, R.string.voice_commands_next_link)) {
       node = accessibilityFocusMonitor.getAccessibilityFocus(false);
-      boolean isWebElement = WebInterfaceUtils.supportsWebActions(node);
 
-      if (!sendInterpretation(
-          VOICE_COMMAND_NEXT_GRANULARITY,
-          isWebElement ? CursorGranularity.WEB_LINK : CursorGranularity.LINK,
-          eventId)) {
+      if (!sendInterpretation(VOICE_COMMAND_NEXT_GRANULARITY, CursorGranularity.LINK, eventId)) {
         pipeline.returnFeedback(eventId, Feedback.sound(R.raw.complete));
         speakDelayed(service.getString(R.string.voice_commands_no_next_link_feedback));
       }
@@ -833,7 +823,14 @@ public class VoiceCommandProcessor {
           service.getString(
               R.string.voice_commands_partial_result, service.getString(R.string.title_pref_help)));
     }
-    analytics.onVoiceCommandEvent(VOICE_COMMAND_UNRECOGNIZED);
+    if (!isPartialResult) {
+      // To expect further partial/final result from speech recognizer could match the supported
+      // commands, we don't log the unrecognized metrics for partial result. On the other hand, for
+      // final result, we should return true even the command match failed so that the entire
+      // session will be terminated.
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_UNRECOGNIZED);
+      return true;
+    }
 
     return false;
   }

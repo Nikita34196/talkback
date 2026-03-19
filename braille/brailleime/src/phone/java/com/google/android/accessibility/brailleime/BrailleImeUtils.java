@@ -16,7 +16,7 @@
 
 package com.google.android.accessibility.brailleime;
 
-import static com.google.android.accessibility.brailleime.BrailleImeActions.Category.SPELL_CHECK;
+import static com.google.android.accessibility.brailleime.SupportedCommand.Category.SPELL_CHECK;
 import static com.google.android.accessibility.brailleime.settings.BrailleImeGestureActivity.CATEGORY;
 
 import android.content.Context;

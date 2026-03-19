@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -27,6 +27,7 @@
 #include <sys/usb/clients/ugen/usb_ugen.h>
 
 #include "log.h"
+#include "bitfield.h"
 #include "io_usb.h"
 #include "usb_internal.h"
 

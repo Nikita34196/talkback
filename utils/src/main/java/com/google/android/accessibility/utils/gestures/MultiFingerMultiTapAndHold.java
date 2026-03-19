@@ -31,8 +31,9 @@ class MultiFingerMultiTapAndHold extends MultiFingerMultiTap {
       int fingers,
       int taps,
       int gestureId,
-      GestureMatcher.StateChangeListener listener) {
-    super(context, fingers, taps, gestureId, listener);
+      GestureMatcher.StateChangeListener listener,
+      GestureMatcher.AnalyticsEventLogger logger) {
+    super(context, fingers, taps, gestureId, listener, logger);
   }
 
   @Override

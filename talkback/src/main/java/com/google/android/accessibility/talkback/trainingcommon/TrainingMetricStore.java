@@ -17,8 +17,14 @@
 package com.google.android.accessibility.talkback.trainingcommon;
 
 import android.content.Context;
+import androidx.annotation.NonNull;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.TrainingSectionId;
 import com.google.android.accessibility.talkback.trainingcommon.PageConfig.PageId;
+import com.google.android.accessibility.utils.StringBuilderUtils;
+import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import java.time.Duration;
 
 /** A delegate class to transit the statistics to a persistent storage. */
 public class TrainingMetricStore {
@@ -26,6 +32,57 @@ public class TrainingMetricStore {
   public enum Type {
     TUTORIAL,
     ONBOARDING,
+  }
+
+  /** Class stores the aggregated training data. */
+  @AutoValue
+  public abstract static class TrainingMetric {
+    public abstract TrainingMetricStore.Type type();
+
+    public abstract boolean trainingStarted();
+
+    public abstract Duration trainingCompletedDuration();
+
+    public abstract ImmutableMap<PageId, Duration> stayingPageDuration();
+
+    public abstract ImmutableSet<PageId> completedPages();
+
+    public static Builder builder() {
+      return new AutoValue_TrainingMetricStore_TrainingMetric.Builder()
+          .setStayingPageDuration(ImmutableMap.of())
+          .setTrainingCompletedDuration(Duration.ZERO)
+          .setCompletedPages(ImmutableSet.of());
+    }
+
+    @NonNull
+    @Override
+    public final String toString() {
+      return "TrainingMetric: "
+          + StringBuilderUtils.joinFields(
+              StringBuilderUtils.optionalField("type", type()),
+              StringBuilderUtils.optionalTag("trainingStarted", trainingStarted()),
+              StringBuilderUtils.optionalField(
+                  "trainingCompletedDuration", trainingCompletedDuration()),
+              StringBuilderUtils.optionalField("stayingPageDuration", stayingPageDuration()),
+              StringBuilderUtils.optionalField("completedPages", completedPages()));
+    }
+
+    /** Builder of {@link TrainingMetric}. */
+    @AutoValue.Builder
+    public abstract static class Builder {
+      public abstract Builder setType(TrainingMetricStore.Type type);
+
+      public abstract Builder setTrainingStarted(boolean trainingStarted);
+
+      public abstract Builder setTrainingCompletedDuration(Duration completedDuration);
+
+      public abstract Builder setStayingPageDuration(
+          ImmutableMap<PageId, Duration> stayingPageDuration);
+
+      public abstract Builder setCompletedPages(ImmutableSet<PageId> completedPages);
+
+      public abstract TrainingMetric build();
+    }
   }
 
   public TrainingMetricStore(Context context, Type trainingType) {}

@@ -20,12 +20,21 @@ import java.util.Objects;
 
 /** Index of start and end of selected text. */
 public class SelectionRange {
+  private static final int NO_CURSOR = -1;
+
   /** The start selection index. */
   public final int start;
+
   /** The end selection index. */
   public final int end;
 
   public SelectionRange(int start, int end) {
+    if (start < NO_CURSOR) {
+      throw new IllegalArgumentException("Cursor index not supported: " + start);
+    }
+    if (end < NO_CURSOR) {
+      throw new IllegalArgumentException("Cursor index not supported: " + end);
+    }
     this.start = start;
     this.end = end;
   }

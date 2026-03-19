@@ -16,9 +16,11 @@
 
 package com.google.android.accessibility.utils.monitor;
 
+import android.os.Build.VERSION;
 import android.text.TextUtils;
 import android.util.SparseArray;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
@@ -130,14 +132,6 @@ public class CollectionState {
         public boolean accept(AccessibilityNodeInfoCompat node) {
           return AccessibilityNodeInfoUtils.FILTER_COLLECTION.accept(node)
               && (node.getCollectionInfo() == null || !node.getCollectionInfo().isHierarchical());
-        }
-      };
-
-  private static final Filter<AccessibilityNodeInfoCompat> FILTER_COLLECTION_ITEM =
-      new Filter<AccessibilityNodeInfoCompat>() {
-        @Override
-        public boolean accept(AccessibilityNodeInfoCompat node) {
-          return node != null && node.getCollectionItemInfo() != null;
         }
       };
 
@@ -356,6 +350,9 @@ public class CollectionState {
     return String.format(" CollectionState:  role=%s, ", getCollectionRole())
         + String.format("colCount=%s, ", getCollectionColumnCount())
         + String.format("rowCount=%s, ", getCollectionRowCount())
+        + String.format("itemCount=%s ", getItemCount())
+        + String.format(
+            "importantForAccessibilityItemCount=%s", getImportantForAccessibilityCollectionCount())
         + String.format("collectionTransition=%s, ", getCollectionTransition())
         + String.format("rowColTransition=%s, ", getRowColumnTransition())
         + String.format("selectionMode=%s, ", getSelectionMode());
@@ -422,6 +419,29 @@ public class CollectionState {
     return mCollectionRoot.getCollectionInfo().getColumnCount();
   }
 
+  /** Returns the count of items in a collection, or -1 if the count is unavailable. */
+  public int getItemCount() {
+    if (VERSION.SDK_INT >= 35 && mCollectionRoot != null) {
+      AccessibilityNodeInfo node = mCollectionRoot.unwrap();
+      return node.getCollectionInfo() == null ? -1 : node.getCollectionInfo().getItemCount();
+    }
+    return -1;
+  }
+
+  /**
+   * Returns the count of items in a collection that are important for accessibility, or -1 if the
+   * count is not available.
+   */
+  public int getImportantForAccessibilityCollectionCount() {
+    if (VERSION.SDK_INT >= 35 && mCollectionRoot != null) {
+      AccessibilityNodeInfo node = mCollectionRoot.unwrap();
+      return node.getCollectionInfo() == null
+          ? -1
+          : node.getCollectionInfo().getImportantForAccessibilityItemCount();
+    }
+    return -1;
+  }
+
   @CollectionAlignment
   public int getCollectionAlignment() {
     if (mCollectionRoot == null) {
@@ -464,7 +484,7 @@ public class CollectionState {
    * com.google.android.accessibility.utils.Role#ROLE_LIST}.
    */
   public @Nullable ListItemState getListItemState() {
-    if (mItemState != null && mItemState instanceof ListItemState) {
+    if (mItemState instanceof ListItemState) {
       return (ListItemState) mItemState;
     }
 
@@ -483,7 +503,7 @@ public class CollectionState {
     // nested, any performance penalty would be minimal.
     AccessibilityNodeInfoCompat collectionItemNode =
         AccessibilityNodeInfoUtils.getSelfOrMatchingAncestor(
-            announcedNode, collectionRoot, FILTER_COLLECTION_ITEM);
+            announcedNode, collectionRoot, AccessibilityNodeInfoUtils.FILTER_COLLECTION_ITEM);
 
     if (collectionItemNode == null) {
       return null;
@@ -541,7 +561,7 @@ public class CollectionState {
     AccessibilityNode collectionItemNode =
         AccessibilityNode.takeOwnership(
             AccessibilityNodeInfoUtils.getSelfOrMatchingAncestor(
-                announcedNode, collectionRoot, FILTER_COLLECTION_ITEM));
+                announcedNode, collectionRoot, AccessibilityNodeInfoUtils.FILTER_COLLECTION_ITEM));
 
     if (collectionItemNode == null) {
       return null;
@@ -563,7 +583,7 @@ public class CollectionState {
    * com.google.android.accessibility.utils.Role#ROLE_GRID}.
    */
   public @Nullable TableItemState getTableItemState() {
-    if (mItemState != null && mItemState instanceof TableItemState) {
+    if (mItemState instanceof TableItemState) {
       return (TableItemState) mItemState;
     }
 
@@ -584,7 +604,7 @@ public class CollectionState {
     // nested, any performance penalty would be minimal.
     AccessibilityNodeInfoCompat collectionItemNode =
         AccessibilityNodeInfoUtils.getSelfOrMatchingAncestor(
-            announcedNode, collectionRoot, FILTER_COLLECTION_ITEM);
+            announcedNode, collectionRoot, AccessibilityNodeInfoUtils.FILTER_COLLECTION_ITEM);
 
     if (collectionItemNode == null) {
       return null;
@@ -600,10 +620,10 @@ public class CollectionState {
     CharSequence columnName = columnIndex != -1 ? columnHeaders.get(columnIndex) : null;
     CharSequence roleDescription = collectionItemNode.getRoleDescription();
     if (rowName == null) {
-      rowName = AccessibilityNodeInfoUtils.geGridRowTitle(collectionItemNode);
+      rowName = AccessibilityNodeInfoUtils.getGridRowTitle(collectionItemNode);
     }
     if (columnName == null) {
-      columnName = AccessibilityNodeInfoUtils.geGridColumnTitle(collectionItemNode);
+      columnName = AccessibilityNodeInfoUtils.getGridColumnTitle(collectionItemNode);
     }
 
     return new TableItemState(heading, rowName, columnName, roleDescription, rowIndex, columnIndex);
@@ -656,7 +676,9 @@ public class CollectionState {
     if ((mCollectionRoot != null) && announcedNode.equals(mCollectionRoot)) {
       newCollectionRoot = mCollectionRoot;
     } else {
-      newCollectionRoot = AccessibilityNodeInfoUtils.getCollectionRoot(announcedNode.getParent());
+      // If announcedNode is a collection already, it should be excluded from the search, or the
+      // collection level will be incorrect.
+      newCollectionRoot = AccessibilityNodeInfoUtils.getCollectionRootExcludeSelf(announcedNode);
     }
 
     // STATE DIAGRAM:

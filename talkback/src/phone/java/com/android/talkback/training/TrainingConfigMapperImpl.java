@@ -33,29 +33,27 @@ public final class TrainingConfigMapperImpl implements TrainingConfigMapper {
   @Override
   @Nullable
   public TrainingConfig getTraining(TrainingId trainingId, @Nullable Context context) {
-    switch (trainingId) {
-      case TRAINING_ID_ON_BOARDING_TALKBACK:
-        return getTalkBackOnBoardingForSettings();
-      case TRAINING_ID_FIRST_RUN_AFTER_UPDATED_ON_BOARDING_TALKBACK:
-        return getTalkBackOnBoardingForUpdated();
-      case TRAINING_ID_ON_BOARDING_FOR_MULTIFINGER_GESTURES:
-        return OnboardingConfigs.ON_BOARDING_FOR_MULTIFINGER_GESTURES;
-      case TRAINING_ID_FIRST_RUN_TUTORIAL:
-        return TutorialConfigUtils.getFirstRunTutorial(context);
-      case TRAINING_ID_TUTORIAL:
-        return TutorialConfigUtils.getTutorialInSettings(context);
-      case TRAINING_ID_TUTORIAL_PRACTICE_GESTURE:
-        return TutorialConfigUtils.TUTORIAL_PRACTICE_GESTURE;
-      case TRAINING_ID_TUTORIAL_PRACTICE_GESTURE_PRE_R:
-        return TutorialConfigUtils.TUTORIAL_PRACTICE_GESTURE_PRE_R;
-      case TRAINING_ID_TUTORIAL_SPELL_CHECK:
-        return TutorialConfigUtils.getSpellCheckTutorial(context);
-      case TRAINING_ID_VOICE_COMMAND_HELP:
-        return VoiceCommandAndHelpConfigs.VOICE_COMMAND_HELP;
-      case TRAINING_ID_TUTORIAL_FOR_TV:
-        return TvTutorialInitiator.getTraining(context, VendorConfigReader.retrieveConfig(context));
-      default:
-        return null;
-    }
+    return switch (trainingId) {
+      case TRAINING_ID_ON_BOARDING_TALKBACK -> getTalkBackOnBoardingForSettings();
+      case TRAINING_ID_FIRST_RUN_AFTER_UPDATED_ON_BOARDING_TALKBACK ->
+          getTalkBackOnBoardingForUpdated();
+      case TRAINING_ID_ON_BOARDING_FOR_MULTIFINGER_GESTURES ->
+          OnboardingConfigs.ON_BOARDING_FOR_MULTIFINGER_GESTURES;
+      case TRAINING_ID_FIRST_RUN_TUTORIAL -> TutorialConfigUtils.getFirstRunTutorial(context);
+      case TRAINING_ID_FIRST_RUN_KEYBOARD_TUTORIAL ->
+          TutorialConfigUtils.getFirstRunKeyboardTutorial(context);
+      case TRAINING_ID_TUTORIAL -> TutorialConfigUtils.getTutorialInSettings(context);
+      case TRAINING_ID_TUTORIAL_PRACTICE_GESTURE -> TutorialConfigUtils.TUTORIAL_PRACTICE_GESTURE;
+      case TRAINING_ID_TUTORIAL_PRACTICE_GESTURE_PRE_R ->
+          TutorialConfigUtils.TUTORIAL_PRACTICE_GESTURE_PRE_R;
+      case TRAINING_ID_TUTORIAL_PRACTICE_KEYBOARD_GESTURE ->
+          TutorialConfigUtils.TUTORIAL_PRACTICE_KEYBOARD_GESTURES;
+      case TRAINING_ID_TUTORIAL_SPELL_CHECK -> TutorialConfigUtils.getSpellCheckTutorial(context);
+      case TRAINING_ID_VOICE_COMMAND_HELP -> VoiceCommandAndHelpConfigs.VOICE_COMMAND_HELP;
+      case TRAINING_ID_TUTORIAL_FOR_TV ->
+          TvTutorialInitiator.getTraining(context, VendorConfigReader.retrieveConfig(context));
+      case TRAINING_ID_TUTORIAL_KEYBOARD -> TutorialConfigUtils.getKeyboardTutorial(context);
+      default -> null;
+    };
   }
 }

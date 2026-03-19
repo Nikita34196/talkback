@@ -44,6 +44,21 @@ public interface LatencyTracker {
    */
   default void onGestureRecognized(GestureEventData gestureEventData) {}
 
+  /**
+   * Tracks the latency of processing the event from user input or framework.
+   *
+   * <p>This method is invoked when the feedback is ready to play.
+   */
+  default void onFeedbackReady(EventData eventData) {}
+
+  /**
+   * Tracks the latency of processing the event from user input or framework.
+   *
+   * <p>This method is invoked after {@link
+   * android.speech.tts.UtteranceProgressListener#onRangeStart(String, int, int, int)} is called.
+   */
+  default void onFeedbackRangeStart(EventData eventData) {}
+
   /** Gets the executor on which to run the callback. */
   Executor getExecutor();
 }

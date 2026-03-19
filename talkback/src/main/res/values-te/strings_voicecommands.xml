@@ -76,7 +76,7 @@
   <string name="voice_commands_stop">ఆపివేయి</string>
   <string name="voice_commands_quit">నిష్క్రమించండి</string>
   <string name="voice_commands_quiet">నిశ్శబ్దంగా ఉండు</string>
-  <string name="voice_commands_pause">పాజ్ చేయి</string>
+  <string name="voice_commands_pause">పాజ్ చేయండి</string>
   <string name="voice_commands_nevermind">ఫర్వాలేదు</string>
   <string name="voice_commands_shut_up">మాట్లాడకుండా ఉండు</string>
   <string name="voice_commands_faster">మరింత వేగం</string>
@@ -126,7 +126,7 @@
   <string name="voice_commands_help_copy_description">కాపీ చేయడానికి ముందు టెక్స్ట్‌ను ఎంచుకోండి</string>
   <string name="voice_commands_help_cut_description">కట్ చేయడానికి ముందు టెక్స్ట్‌ను ఎంచుకోండి</string>
   <string name="voice_commands_help_delete_description">తొలగించడానికి ముందు టెక్స్ట్‌ను ఎంచుకోండి</string>
-  <string name="voice_commands_help_device_navigation_title">పరికర నావిగేషన్</string>
+  <string name="voice_commands_help_device_navigation_title">డివైజ్ నావిగేషన్</string>
   <string name="voice_commands_help_device_navigation_description">మొదటి ట్యాబ్‌కు వెళ్లు, వెనుకకు వెళ్లు, నోటిఫికేషన్‌లను చూపించు, మరిన్ని</string>
   <string name="voice_commands_help_overview_description">మీ ఇటీవలి యాప్‌లను చూడండి</string>
   <string name="voice_commands_help_assistant_description">Google Assistantను తెరుస్తుంది</string>

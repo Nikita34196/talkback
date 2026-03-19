@@ -160,19 +160,15 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
 
     Rect bestCandidateRect = new Rect(focusedRect);
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
-        bestCandidateRect.offset(focusedRect.width() + 1, 0);
-        break;
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
-        bestCandidateRect.offset(-(focusedRect.width() + 1), 0);
-        break;
-      case TraversalStrategy.SEARCH_FOCUS_UP:
-        bestCandidateRect.offset(0, focusedRect.height() + 1);
-        break;
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
-        bestCandidateRect.offset(0, -(focusedRect.height() + 1));
-        break;
-      default: // fall out
+      case TraversalStrategy.SEARCH_FOCUS_LEFT ->
+          bestCandidateRect.offset(focusedRect.width() + 1, 0);
+      case TraversalStrategy.SEARCH_FOCUS_RIGHT ->
+          bestCandidateRect.offset(-(focusedRect.width() + 1), 0);
+      case TraversalStrategy.SEARCH_FOCUS_UP ->
+          bestCandidateRect.offset(0, focusedRect.height() + 1);
+      case TraversalStrategy.SEARCH_FOCUS_DOWN ->
+          bestCandidateRect.offset(0, -(focusedRect.height() + 1));
+      default -> {}
     }
 
     AccessibilityNodeInfoCompat closest = null;
@@ -294,36 +290,35 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
     root.getBoundsInScreen(rootBounds);
 
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT: // Start from right and move leftwards.
-        rect.set(
-            rootBounds.right,
-            focusedRect.top,
-            rootBounds.right + focusedRect.width(),
-            focusedRect.bottom);
-        break;
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT: // Start from left and move rightwards.
-        rect.set(
-            rootBounds.left - focusedRect.width(),
-            focusedRect.top,
-            rootBounds.left,
-            focusedRect.bottom);
-        break;
-      case TraversalStrategy.SEARCH_FOCUS_UP: // Start from bottom and move upwards.
-        rect.set(
-            focusedRect.left,
-            rootBounds.bottom,
-            focusedRect.right,
-            rootBounds.bottom + focusedRect.height());
-        break;
-      case TraversalStrategy.SEARCH_FOCUS_DOWN: // Start from top and move downwards.
-        rect.set(
-            focusedRect.left,
-            rootBounds.top - focusedRect.height(),
-            focusedRect.right,
-            rootBounds.top);
-        break;
-      default:
-        throw new IllegalArgumentException("direction must be a SearchDirection");
+      case TraversalStrategy.SEARCH_FOCUS_LEFT ->
+          // Start from right and move leftwards.
+          rect.set(
+              rootBounds.right,
+              focusedRect.top,
+              rootBounds.right + focusedRect.width(),
+              focusedRect.bottom);
+      case TraversalStrategy.SEARCH_FOCUS_RIGHT ->
+          // Start from left and move rightwards.
+          rect.set(
+              rootBounds.left - focusedRect.width(),
+              focusedRect.top,
+              rootBounds.left,
+              focusedRect.bottom);
+      case TraversalStrategy.SEARCH_FOCUS_UP ->
+          // Start from bottom and move upwards.
+          rect.set(
+              focusedRect.left,
+              rootBounds.bottom,
+              focusedRect.right,
+              rootBounds.bottom + focusedRect.height());
+      case TraversalStrategy.SEARCH_FOCUS_DOWN ->
+          // Start from top and move downwards.
+          rect.set(
+              focusedRect.left,
+              rootBounds.top - focusedRect.height(),
+              focusedRect.right,
+              rootBounds.top);
+      default -> throw new IllegalArgumentException("direction must be a SearchDirection");
     }
   }
 
@@ -440,19 +435,23 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
    */
   private boolean isCandidate(Rect srcRect, Rect destRect, int direction) {
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
+      case TraversalStrategy.SEARCH_FOCUS_LEFT -> {
         return (srcRect.right > destRect.right || srcRect.left >= destRect.right)
             && srcRect.left > destRect.left;
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_RIGHT -> {
         return (srcRect.left < destRect.left || srcRect.right <= destRect.left)
             && srcRect.right < destRect.right;
-      case TraversalStrategy.SEARCH_FOCUS_UP:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_UP -> {
         return (srcRect.bottom > destRect.bottom || srcRect.top >= destRect.bottom)
             && srcRect.top > destRect.top;
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_DOWN -> {
         return (srcRect.top < destRect.top || srcRect.bottom <= destRect.top)
             && srcRect.bottom < destRect.bottom;
-      default: // fall out
+      }
+      default -> {}
     }
     throw new IllegalArgumentException("direction must be a SearchDirection");
   }
@@ -467,13 +466,13 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
    */
   private boolean beamsOverlap(int direction, Rect rect1, Rect rect2) {
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
+      case TraversalStrategy.SEARCH_FOCUS_LEFT, TraversalStrategy.SEARCH_FOCUS_RIGHT -> {
         return (rect2.bottom >= rect1.top) && (rect2.top <= rect1.bottom);
-      case TraversalStrategy.SEARCH_FOCUS_UP:
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_UP, TraversalStrategy.SEARCH_FOCUS_DOWN -> {
         return (rect2.right >= rect1.left) && (rect2.left <= rect1.right);
-      default: // fall out
+      }
+      default -> {}
     }
     throw new IllegalArgumentException("direction must be a SearchDirection");
   }
@@ -481,15 +480,19 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
   /** e.g. for left, is 'to left of' */
   private boolean isToDirectionOf(int direction, Rect src, Rect dest) {
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
+      case TraversalStrategy.SEARCH_FOCUS_LEFT -> {
         return src.left >= dest.right;
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_RIGHT -> {
         return src.right <= dest.left;
-      case TraversalStrategy.SEARCH_FOCUS_UP:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_UP -> {
         return src.top >= dest.bottom;
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_DOWN -> {
         return src.bottom <= dest.top;
-      default: // fall out
+      }
+      default -> {}
     }
     throw new IllegalArgumentException("direction must be a SearchDirection");
   }
@@ -505,15 +508,19 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
 
   static int majorAxisDistanceRaw(int direction, Rect source, Rect dest) {
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
+      case TraversalStrategy.SEARCH_FOCUS_LEFT -> {
         return source.left - dest.right;
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_RIGHT -> {
         return dest.left - source.right;
-      case TraversalStrategy.SEARCH_FOCUS_UP:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_UP -> {
         return source.top - dest.bottom;
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_DOWN -> {
         return dest.top - source.bottom;
-      default: // fall out
+      }
+      default -> {}
     }
     throw new IllegalArgumentException("direction must be a SearchDirection");
   }
@@ -529,15 +536,19 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
 
   static int majorAxisDistanceToFarEdgeRaw(int direction, Rect source, Rect dest) {
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
+      case TraversalStrategy.SEARCH_FOCUS_LEFT -> {
         return source.left - dest.left;
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_RIGHT -> {
         return dest.right - source.right;
-      case TraversalStrategy.SEARCH_FOCUS_UP:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_UP -> {
         return source.top - dest.top;
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_DOWN -> {
         return dest.bottom - source.bottom;
-      default: // fall out
+      }
+      default -> {}
     }
     throw new IllegalArgumentException("direction must be a SearchDirection");
   }
@@ -553,15 +564,15 @@ public class DirectionalTraversalStrategy implements TraversalStrategy {
    */
   static int minorAxisDistance(int direction, Rect source, Rect dest) {
     switch (direction) {
-      case TraversalStrategy.SEARCH_FOCUS_LEFT:
-      case TraversalStrategy.SEARCH_FOCUS_RIGHT:
+      case TraversalStrategy.SEARCH_FOCUS_LEFT, TraversalStrategy.SEARCH_FOCUS_RIGHT -> {
         // the distance between the center verticals
         return Math.abs(((source.top + source.height() / 2) - ((dest.top + dest.height() / 2))));
-      case TraversalStrategy.SEARCH_FOCUS_UP:
-      case TraversalStrategy.SEARCH_FOCUS_DOWN:
+      }
+      case TraversalStrategy.SEARCH_FOCUS_UP, TraversalStrategy.SEARCH_FOCUS_DOWN -> {
         // the distance between the center horizontals
         return Math.abs(((source.left + source.width() / 2) - ((dest.left + dest.width() / 2))));
-      default: // fall out
+      }
+      default -> {}
     }
     throw new IllegalArgumentException("direction must be a SearchDirection");
   }

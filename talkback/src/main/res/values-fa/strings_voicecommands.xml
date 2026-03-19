@@ -72,7 +72,7 @@
   <string name="voice_commands_back">برگشتن</string>
   <string name="voice_commands_go_back">برگشتن</string>
   <string name="voice_commands_home">صفحه اصلی</string>
-  <string name="voice_commands_desktop">میزکار</string>
+  <string name="voice_commands_desktop">میز کار</string>
   <string name="voice_commands_stop">متوقف کردن</string>
   <string name="voice_commands_quit">خروج</string>
   <string name="voice_commands_quiet">بی‌صدا</string>
@@ -98,9 +98,9 @@
   <string name="voice_commands_no_next_control_feedback">کنترل دیگری وجود ندارد</string>
   <string name="voice_commands_no_next_landmark_feedback">نشانگر مکانی دیگری وجود ندارد</string>
   <string name="voice_commands_help_title">نمای کلی فرمان صوتی</string>
-  <string name="voice_commands_help_description">‏برای استفاده از فرمان‌های صوتی، تند به‌راست و سپس بالا بکشید. هرزمان خواستید برای این فهرست فرمان‌ها، بگویید «%1$s» یا «What can I say?‎» (چه چیزی می‌توانم بگویم؟).</string>
+  <string name="voice_commands_help_description">برای استفاده از فرمان‌های صوتی، تند به راست و سپس بالا بکشید. هرزمان خواستید برای این فهرست فرمان‌ها، بگویید «%1$s» یا «چه می‌توانم بگویم؟».</string>
   <string name="voice_commands_help_hint">برای بهترین نتایج، عبارت دقیق فهرست‌شده در صفحه‌های بعدی را بگویید.</string>
-  <string name="voice_command_screen_locked_hint">‏فرمان‌های صوتی هنگام قفل بودن صفحه دردسترس نیستند. درعوض برای استفاده از منوی TalkBack، %1$s.</string>
+  <string name="voice_command_screen_locked_hint">‏فرمان‌های صوتی هنگام قفل بودن صفحه دردسترس نیستند. درعوض برای استفاده از منوِ TalkBack، %1$s.</string>
   <string name="voice_commands_during_setup_hint">درطول راه‌اندازی، فرمان‌های صوتی دردسترس نیستند</string>
   <string name="voice_commands_help_reading_controls_title">@string/shortcut_title_reading_control</string>
   <string name="voice_commands_help_reading_controls_description">تغییر نحوه خواندن محتوا در صفحه فعلی</string>

@@ -35,7 +35,7 @@ public interface CellsContentConsumer {
   void setContent(CellsContent content, Reason reason);
 
   /** Sets timed content with specific duration. */
-  void setTimedContent(CellsContent content, int durationInMilliseconds);
+  void setTimedContent(TimedMessager.Type type, CellsContent content, int durationInMilliseconds);
 
   /** Returns accessibility node at the given position. */
   AccessibilityNodeInfoCompat getAccessibilityNode(int routingKeyIndex);
@@ -46,9 +46,15 @@ public interface CellsContentConsumer {
   /** Gets the {@link android.text.style.ClickableSpan} in the specific index. */
   Optional<ClickableSpan[]> getClickableSpans(int routingKeyIndex);
 
-  /** Clears timed message. */
-  void clearTimedMessage();
+  /** Dismisses current timed message. */
+  void dismissTimedMessage();
+
+  /** Displays the latest caption. */
+  boolean showLatestCaption();
 
   /** Returns whether timed message is displaying. */
   boolean isTimedMessageDisplaying();
+
+  /** Returns whether caption is displaying. */
+  boolean isCaptionShowing();
 }

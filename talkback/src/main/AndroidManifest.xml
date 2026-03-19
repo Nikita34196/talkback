@@ -30,7 +30,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Required for App Enumeration -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
 
     <!-- Required for sending data to Google Analytics. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -63,6 +63,9 @@
 
     <application
         android:supportsRtl="true">
+
+        <!-- Allows local profiling on release builds -->
+        <profileable android:shell="true" />
 
         <!-- TalkBack -->
         <service
@@ -137,13 +140,20 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/TrainingActivityTheme"
-            android:windowSoftInputMode="adjustResize"
+            android:windowSoftInputMode="adjustPan"
             tools:ignore="ExportedActivity"
             android:directBootAware="true">
             <intent-filter>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <action android:name="com.google.android.accessibility.talkback.training.START" />
             </intent-filter>
+        </activity>
+
+        <!-- To choose between touch and keyboard tutorial. -->
+        <activity
+            android:name="com.google.android.accessibility.talkback.trainingcommon.TutorialChooserActivity"
+            android:theme="@style/Theme.TutorialChooserDialog"
+            android:exported="false">
         </activity>
 
         <!-- Absolutely same with TrainingActivity for onboarding link to tutorial without breaking the singleTop launch mode.
@@ -154,7 +164,7 @@
             android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
             android:theme="@style/TrainingActivityTheme"
-            android:windowSoftInputMode="adjustResize"
+            android:windowSoftInputMode="adjustPan"
             tools:ignore="ExportedActivity"
             android:directBootAware="true">
         </activity>
@@ -174,11 +184,6 @@
             android:launchMode="singleTop"
             android:theme="@style/TalkBackSettings"
             android:taskAffinity="com.google.android.accessibility.talkback.SettingsAffinity" >
-            <!-- This preference activity can receive an implicit intent action -->
-            <intent-filter>
-                <action android:name=".labeling.TalkBackSelectorPreferencesActivity" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
 
         <!-- Custom Label Manager - Package Activity -->
@@ -248,6 +253,15 @@
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="ocr" />
+
+        <receiver
+            android:name="com.google.android.libraries.appdoctor.AppDoctorReceiver"
+            android:exported="true"
+            android:permission="com.google.android.gms.permission.INTERNAL_BROADCAST">
+            <intent-filter>
+                <action android:name="com.google.android.libraries.appdoctor.ACTION_TELE_DOCTOR_FIX"/>
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>

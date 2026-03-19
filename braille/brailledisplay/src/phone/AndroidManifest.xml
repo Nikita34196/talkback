@@ -24,19 +24,16 @@
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.BrailleDisplaySettingsActivity"
         android:label="@string/bd_preferences_title"
         android:theme="@style/BrailleSettingsTheme"
-        android:configChanges="orientation|screenSize"
-        android:exported="true"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout"
+        android:exported="false"
         android:launchMode="singleTop" >
-      <intent-filter>
-        <action android:name=".BrailleDisplayPreferencesActivity" />
-        <category android:name="android.intent.category.DEFAULT" />
-      </intent-filter>
     </activity>
 
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.BrailleGradeActivity"
         android:label="@string/pref_preferred_braille_grade_title"
         android:exported="true"
+        android:configChanges="keyboard|keyboardHidden"
         android:theme="@style/BrailleSettingsTheme" >
         <!-- TODO: Currently, braille grade is placed in braille display folder and share with braille keyboard. If we're going separate them into different settings. This intent filter can be removed. -->
       <intent-filter>
@@ -48,11 +45,13 @@
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.KeyBindingsActivity"
         android:label="@string/bd_preference_key_bindings_title"
+        android:configChanges="keyboard|keyboardHidden"
         android:exported="false"
         android:theme="@style/BrailleSettingsTheme" />
 
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.KeyBindingsCommandActivity"
+        android:configChanges="keyboard|keyboardHidden"
         android:exported="false"
         android:theme="@style/BrailleSettingsTheme" >
     </activity>
@@ -60,11 +59,19 @@
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.BrailleElementsActivity"
         android:label="@string/bd_preference_key_braille_elements_title"
+        android:configChanges="keyboard|keyboardHidden"
+        android:exported="false"
+        android:theme="@style/BrailleSettingsTheme" />
+
+    <activity
+        android:name="com.google.android.accessibility.braille.brailledisplay.settings.BrailleLearningModeActivity"
+        android:label="@string/bd_preference_key_learning_mode_title"
         android:exported="false"
         android:theme="@style/BrailleSettingsTheme" />
 
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.BrailleDisplayImeUnavailableActivity"
+        android:configChanges="keyboard|keyboardHidden"
         android:label="@string/bd_ime_unavailable_activity_name"
         android:exported="false"
         android:excludeFromRecents="true"
@@ -72,12 +79,14 @@
 
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.AutoScrollActivity"
+        android:configChanges="keyboard|keyboardHidden"
         android:label="@string/bd_preference_key_auto_scroll_title"
         android:exported="false"
         android:theme="@style/BrailleSettingsTheme" />
 
     <activity
         android:name="com.google.android.accessibility.braille.brailledisplay.settings.AdvancedSettingsActivity"
+        android:configChanges="keyboard|keyboardHidden"
         android:label="@string/bd_preference_key_advanced_settings_title"
         android:exported="false"
         android:theme="@style/BrailleSettingsTheme" />

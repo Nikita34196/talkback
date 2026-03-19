@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -458,15 +458,14 @@ handleSpeechRequest (SpeechDriverThread *sdt, SpeechRequest *req) {
     switch (req->type) {
       case REQ_SAY_TEXT: {
         SayOptions options = req->arguments.sayText.options;
+        if (options & SAY_OPT_MUTE_FIRST) speech->mute(spk);
+
         int restorePitch = 0;
         int restorePunctuation = 0;
-
-        if (options & SAY_OPT_MUTE_FIRST) speech->mute(spk);
 
         if (options & SAY_OPT_HIGHER_PITCH) {
           if (spk->setPitch) {
             unsigned char pitch = prefs.speechPitch + 7;
-
             if (pitch > SPK_PITCH_MAXIMUM) pitch = SPK_PITCH_MAXIMUM;
 
             if (pitch != prefs.speechPitch) {

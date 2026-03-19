@@ -129,8 +129,7 @@ public class GeminiSettingsFragment extends TalkbackBaseFragment {
 
     @SuppressLint("InflateParams")
     @Override
-    public View getCustomizedView() {
-      LayoutInflater inflater = LayoutInflater.from(context);
+    public View getCustomizedView(LayoutInflater inflater) {
       final ScrollView root =
           (ScrollView) inflater.inflate(R.layout.gemini_opt_in_switch_dialog, /* root= */ null);
 

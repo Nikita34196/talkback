@@ -16,6 +16,9 @@
 
 package com.google.android.accessibility.talkback.contextmenu;
 
+import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+import static android.widget.LinearLayout.HORIZONTAL;
+import static android.widget.LinearLayout.VERTICAL;
 import static com.google.android.accessibility.talkback.Feedback.Focus.Action.CACHE;
 import static com.google.android.accessibility.talkback.Feedback.Focus.Action.MUTE_NEXT_FOCUS;
 import static com.google.android.accessibility.talkback.Feedback.Focus.Action.RESTORE_ON_NEXT_WINDOW;
@@ -23,25 +26,30 @@ import static com.google.android.accessibility.talkback.Feedback.Speech.Action.S
 import static com.google.android.accessibility.talkback.contextmenu.ListMenuManager.MenuId.CONTEXT;
 import static com.google.android.accessibility.talkback.contextmenu.ListMenuManager.MenuId.CUSTOM_ACTION;
 import static com.google.android.accessibility.talkback.contextmenu.ListMenuManager.MenuId.LANGUAGE;
-import static com.google.android.accessibility.talkback.contextmenu.ListMenuManager.MenuId.LINKS;
 import static com.google.android.accessibility.talkback.eventprocessor.EventState.EVENT_SKIP_FOCUS_SYNC_FROM_VIEW_FOCUSED;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import android.view.ContextThemeWrapper;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewGroup.LayoutParams;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import androidx.annotation.VisibleForTesting;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.talkback.ActorState;
 import com.google.android.accessibility.talkback.Feedback;
@@ -55,12 +63,15 @@ import com.google.android.accessibility.talkback.focusmanagement.AccessibilityFo
 import com.google.android.accessibility.talkback.focusmanagement.record.FocusActionRecord;
 import com.google.android.accessibility.talkback.menurules.NodeMenuRuleProcessor;
 import com.google.android.accessibility.utils.AccessibilityEventListener;
+import com.google.android.accessibility.utils.AccessibilityServiceCompatUtils;
+import com.google.android.accessibility.utils.DisplayUtils;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.SettingsUtils;
 import com.google.android.accessibility.utils.input.WindowEventInterpreter.EventInterpretation;
 import com.google.android.accessibility.utils.input.WindowEventInterpreter.WindowEventHandler;
 import com.google.android.accessibility.utils.material.A11yAlertDialogWrapper;
+import com.google.android.accessibility.utils.monitor.ScreenMonitor;
 import com.google.android.accessibility.utils.output.FeedbackItem;
 import com.google.android.accessibility.utils.output.SpeechController;
 import com.google.android.accessibility.utils.output.SpeechController.SpeakOptions;
@@ -93,7 +104,7 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
 
   private static final int INVALID_RES_ID = -1;
 
-  private TalkBackService service;
+  private final TalkBackService service;
   private final Pipeline.FeedbackReturner pipeline;
   private final ActorState actorState;
   private final NodeMenuRuleProcessor nodeMenuRuleProcessor;
@@ -107,14 +118,13 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
   private long lastMenuDismissUptimeMs;
   private AccessibilityNodeInfoCompat currentNode;
   private ContextMenu contextMenu;
-  private final FormFactorUtils formFactorUtils;
+  private @Nullable MenuId menuId;
 
   /** Id to identify the menu content. */
   public enum MenuId {
     CONTEXT,
     CUSTOM_ACTION,
     LANGUAGE,
-    LINKS,
   }
 
   public ListMenuManager(
@@ -130,8 +140,7 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
     this.nodeMenuRuleProcessor = nodeMenuRuleProcessor;
     this.accessibilityFocusMonitor = accessibilityFocusMonitor;
     this.analytics = analytics;
-    this.formFactorUtils = FormFactorUtils.getInstance();
-    menuClickProcessor = new ContextMenuItemClickProcessor(service, pipeline);
+    menuClickProcessor = new ContextMenuItemClickProcessor(service, pipeline, analytics);
   }
 
   @CanIgnoreReturnValue
@@ -141,6 +150,17 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
 
   @CanIgnoreReturnValue
   public boolean showMenu(MenuId menuId, EventId eventId, int failureStringResId) {
+    if (FormFactorUtils.isAndroidXr() && this.menuId == menuId && this.menuId == CONTEXT) {
+      // If a request to show context menu is triggered while the menu is already showing, dismiss
+      // the menu. This is to prevent the user from having to navigate through the whole menu just
+      // to close it.
+      dismissAll();
+      return false;
+    }
+
+    // Disables watermark if menu shows.
+    disableTalkBackExitWatermark();
+
     /*
      * We get the last utterance at the time of menu creation.
      * The utterances produced by the user navigating the menu will go into the history.
@@ -149,6 +169,7 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
     pipeline.returnFeedback(eventId, Feedback.speech(SAVE_LAST));
     dismissAll();
     pipeline.returnFeedback(eventId, Feedback.focus(CACHE));
+    this.menuId = menuId;
 
     contextMenu = new ContextMenu(service);
     contextMenu.setDefaultListener(
@@ -209,7 +230,7 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
     if (menuId == CONTEXT && !SettingsUtils.allowLinksOutOfSettings(service)) {
       String titleContentDescription =
           service.getString(R.string.talkback_menu_title_content_description);
-      if (formFactorUtils.isAndroidTv()) {
+      if (FormFactorUtils.isAndroidTv()) {
         new Handler(Looper.getMainLooper())
             .post(() -> attachContentDescriptionOnTitle(currentDialog, titleContentDescription));
       } else {
@@ -239,10 +260,6 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
       // Menu for language switcher
       LanguageMenuProcessor.prepareLanguageMenu(service, pipeline, actorState, menu);
       menu.setTitle(service.getString(R.string.language_options));
-    } else if (menuId == LINKS) {
-      // Menu for spannables
-      nodeMenuRuleProcessor.prepareRuleMenuForNode(menu, currentNode, R.id.links_menu);
-      menu.setTitle(service.getString(R.string.links));
     }
   }
 
@@ -252,11 +269,26 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
       return;
     }
 
-    A11yAlertDialogWrapper.Builder builder = A11yAlertDialogWrapper.materialDialogBuilder(service);
+    // TODO Get displayId by GestureEvent or else, or explicitly choose displayId
+    // Support multi-display
+    final Context displayContext =
+        DisplayUtils.getDisplayContextByWindow(
+            service, AccessibilityServiceCompatUtils.getActiveWidow(service));
+    boolean isDimming =
+        actorState.getDimScreen().isDimmingEnabled()
+            && !actorState.getDimScreen().isInstructionDisplayed();
+    A11yAlertDialogWrapper.Builder builder;
+    if (isDimming) {
+      builder =
+          A11yAlertDialogWrapper.materialDialogBuilder(displayContext, R.style.BlackAlertDialog);
+    } else {
+      builder = A11yAlertDialogWrapper.materialDialogBuilder(displayContext);
+    }
     builder = builder.setTitle(title);
     View customView =
         prepareCustomView(
             items,
+            isDimming,
             (position) -> {
               final ContextMenuItem menuItem = menu.getItem(position);
               if (!menuItem.isEnabled()) {
@@ -315,7 +347,7 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
     builder = builder.setView(customView);
     builder =
         builder.setNegativeButton(
-            android.R.string.cancel,
+            R.string.talkback_menu_close_button_text,
             (dialog, which) -> {
               if (menuActionInterceptor != null) {
                 menuActionInterceptor.onCancelButtonClicked();
@@ -326,7 +358,7 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
             });
     builder = builder.setCancelable(true);
     A11yAlertDialogWrapper.Builder finalBuilder = builder;
-    if (formFactorUtils.isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv()) {
       new Handler(Looper.getMainLooper()).post(() -> openAlert(finalBuilder));
     } else {
       openAlert(finalBuilder);
@@ -365,61 +397,94 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
     }
   }
 
-  private View prepareCustomView(CharSequence[] items, ListMenuClickListener listener) {
-    View view = createListView(); // On TV this will be a RecyclerView (not a subclass of ListView).
-    view.setId(R.id.talkback_menu_listview);
-    view.setBackground(null);
-    if (view instanceof ListView) {
-      ((ListView) view).setDivider(null);
-      ((ListView) view)
+  private View prepareCustomView(
+      CharSequence[] items, boolean isDimming, ListMenuClickListener listener) {
+    View menuList =
+        createListView(); // On TV this will be a RecyclerView (not a subclass of ListView).
+    menuList.setId(R.id.talkback_menu_listview);
+    menuList.setBackground(null);
+    if (menuList instanceof ListView) {
+      ((ListView) menuList).setDivider(null);
+      ((ListView) menuList)
           .setDividerHeight(
               service
                   .getResources()
                   .getDimensionPixelSize(R.dimen.alertdialog_menuitem_divider_height));
     }
-    view.setPaddingRelative(
+    menuList.setPaddingRelative(
         service.getResources().getDimensionPixelSize(R.dimen.alertdialog_padding_start),
         service.getResources().getDimensionPixelSize(R.dimen.alertdialog_padding_top),
         service.getResources().getDimensionPixelSize(R.dimen.alertdialog_padding_end),
         service.getResources().getDimensionPixelSize(R.dimen.alertdialog_padding_bottom));
 
-    if (view instanceof ListView) {
+    Context contextTheme =
+        new ContextThemeWrapper(
+            service, isDimming ? R.style.BlackAlertDialog : R.style.A11yAlertDialogCustomViewTheme);
+    if (menuList instanceof ListView) {
       ArrayAdapter<CharSequence> listAdapter =
           new ArrayAdapter<>(
-              new ContextThemeWrapper(service, R.style.A11yAlertDialogCustomViewTheme),
-              R.layout.list_item_simple_framelayout,
-              android.R.id.text1,
-              items);
-      ((ListView) view).setAdapter(listAdapter);
-      ((ListView) view)
+              contextTheme, R.layout.list_item_simple_framelayout, android.R.id.text1, items);
+      ((ListView) menuList).setAdapter(listAdapter);
+      ((ListView) menuList)
           .setOnItemClickListener((parent, v, position, id) -> listener.onItemClick(position));
     }
-    if (view instanceof RecyclerView) {
+    if (menuList instanceof RecyclerView) {
       RecyclerViewAdapter recyclerAdapter =
           new RecyclerViewAdapter(ImmutableList.copyOf(items), listener);
-      ((RecyclerView) view).setAdapter(recyclerAdapter);
-      ((RecyclerView) view).setLayoutManager(new LinearLayoutManager(view.getContext()));
+      ((RecyclerView) menuList).setAdapter(recyclerAdapter);
+      ((RecyclerView) menuList).setLayoutManager(new LinearLayoutManager(menuList.getContext()));
     }
 
-    view.getContext().setTheme(R.style.A11yAlertDialogCustomViewTheme);
-    if (formFactorUtils.isAndroidWear()) {
+    menuList.getContext().setTheme(R.style.A11yAlertDialogCustomViewTheme);
+    if (FormFactorUtils.isAndroidWear()) {
       // Support Wear rotary input
-      view.requestFocus();
+      menuList.requestFocus();
     }
-    if (formFactorUtils.isAndroidTv()) {
-      view.requestFocus();
+    if (FormFactorUtils.isAndroidTv()) {
+      menuList.requestFocus();
     }
-    return view;
+
+    // Show more-menu-options text in TalkBack menu to let user know there will be more menu options
+    // after device setup or unlocked.
+    if (ScreenMonitor.isDeviceLocked(service) || !SettingsUtils.allowLinksOutOfSettings(service)) {
+      LinearLayout menuContainer = new LinearLayout(service);
+      menuContainer.setOrientation(VERTICAL);
+      menuContainer.setLayoutParams(new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+      menuContainer.addView(menuList);
+      menuContainer.addView(createMoreMenuOptionsText(contextTheme, isDimming));
+      return menuContainer;
+    }
+
+    return menuList;
   }
 
   private View createListView() {
-    if (formFactorUtils.isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       return new NonScrollableListView(service);
     }
-    if (formFactorUtils.isAndroidTv()) {
+    if (FormFactorUtils.isAndroidTv()) {
       return new RecyclerView(service);
     }
     return new ListView(service);
+  }
+
+  private View createMoreMenuOptionsText(Context contextTheme, boolean isDimming) {
+    LinearLayout moreMenuOptions = new LinearLayout(service);
+    moreMenuOptions.setOrientation(HORIZONTAL);
+    moreMenuOptions.setLayoutParams(new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+    moreMenuOptions.setPadding(30, 60, 30, 30);
+    TextView textView = new TextView(contextTheme);
+    textView.setGravity(Gravity.CENTER);
+    textView.setText(R.string.talkback_menu_more_options_text);
+    // Show info icon if it is not dimming.
+    if (!isDimming) {
+      ImageView imageView = new ImageView(service);
+      imageView.setImageDrawable(
+          ResourcesCompat.getDrawable(service.getResources(), R.drawable.ic_info_24dp, null));
+      moreMenuOptions.addView(imageView);
+    }
+    moreMenuOptions.addView(textView);
+    return moreMenuOptions;
   }
 
   private DeferredAction createDeferredAction(
@@ -503,13 +568,34 @@ public class ListMenuManager implements WindowEventHandler, AccessibilityEventLi
     if (contextMenu != null) {
       contextMenu.clear();
       contextMenu = null;
+      menuId = null;
     }
     clearCurrentNode();
   }
 
+  /**
+   * Disables TalkBack-exit watermark if watermark shows when TalkBack menu shows. It reduces
+   * watermark UI for genuine users.
+   */
+  private void disableTalkBackExitWatermark() {
+    if (service.getTalkBackExitController() != null
+        && service.getTalkBackExitController().isTalkBackExitWatermarkShown()) {
+      service.getTalkBackExitController().disableTalkBackExitWatermark(service);
+    }
+  }
+
+  /** Dismisses all TalkBack menus. */
   public void dismissAll() {
     dismissCurrentDialog();
     clearMenu();
+  }
+
+  /** Dismisses TalkBack menu for orientation change if needed. */
+  public void dismissForOrientationChange() {
+    if (currentNode == null || !currentNode.refresh()) {
+      LogUtils.e(TAG, "dismiss menu due to source node is gone.");
+      dismissAll();
+    }
   }
 
   @Override

@@ -19,9 +19,12 @@ package com.google.android.accessibility.utils.gestures;
 import static android.util.Log.VERBOSE;
 
 import android.content.Context;
+import android.graphics.PointF;
+import android.os.Build;
 import android.os.Handler;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
+import androidx.annotation.RequiresApi;
 import com.google.android.accessibility.utils.Performance.EventId;
 
 /**
@@ -29,37 +32,55 @@ import com.google.android.accessibility.utils.Performance.EventId;
  * one finger is held down and a second finger executes the taps. The number of taps for each
  * instance is specified in the constructor.
  */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class SecondFingerTap extends GestureMatcher {
-  private final int targetTaps;
+  private static final int TARGET_FINGER_COUNT = 2;
+  protected final int targetTaps;
   private final int doubleTapTimeout;
-  private int currentTaps;
-  private float baseX;
-  private float baseY;
+  protected int currentTaps;
+  private final int touchSlop;
   private long firstDownTime;
+  // Store initial down points for slop checking and update when next down if is inside slop.
+  private final PointF[] bases;
+  protected boolean pendingRestart;
 
   SecondFingerTap(
-      Context context, int taps, int gesture, GestureMatcher.StateChangeListener listener) {
-    super(gesture, new Handler(context.getMainLooper()), listener);
+      Context context,
+      int taps,
+      int gesture,
+      GestureMatcher.StateChangeListener listener,
+      GestureMatcher.AnalyticsEventLogger logger) {
+    super(gesture, new Handler(context.getMainLooper()), listener, logger);
     targetTaps = taps;
     doubleTapTimeout = ViewConfiguration.getDoubleTapTimeout();
+    touchSlop = ViewConfiguration.get(context).getScaledTouchSlop() * TARGET_FINGER_COUNT;
+    bases = new PointF[TARGET_FINGER_COUNT];
+    for (int i = 0; i < TARGET_FINGER_COUNT; i++) {
+      bases[i] = new PointF();
+    }
     clear();
   }
 
   @Override
   public void clear() {
     currentTaps = 0;
-    baseX = Float.NaN;
-    baseY = Float.NaN;
     firstDownTime = Long.MAX_VALUE;
+    pendingRestart = false;
     super.clear();
   }
 
   // Instead of clear the detector, this method restore the state variables to detect the next tap
   // event.
-  private void restart() {
+  @Override
+  public void restart(boolean pending) {
+    super.restart(pending);
+    pendingRestart = pending;
     currentTaps = 0;
-    baseX = Float.NaN;
-    baseY = Float.NaN;
+  }
+
+  @Override
+  public boolean bypassCancelByTapUpToTouchExplore() {
+    return true;
   }
 
   @Override
@@ -75,27 +96,38 @@ class SecondFingerTap extends GestureMatcher {
       return;
     }
 
-    if (event.getPointerCount() > 2) {
+    if (event.getPointerCount() > TARGET_FINGER_COUNT) {
       gestureMotionEventLog(VERBOSE, "onPointerDown/getPointerCount=%d", event.getPointerCount());
       cancelGesture(event);
       return;
     }
-    // Second finger has gone down.
-    int index = event.getActionIndex();
-    if (Float.isNaN(baseX) && Float.isNaN(baseY)) {
-      baseX = event.getX(index);
-      baseY = event.getY(index);
-    }
-    baseX = event.getX(index);
-    baseY = event.getY(index);
+    bases[0].x = event.getX(0);
+    bases[0].y = event.getY(0);
+    bases[1].x = event.getX(1);
+    bases[1].y = event.getY(1);
   }
 
   @Override
   protected void onPointerUp(EventId eventId, MotionEvent event) {
-    gestureMotionEventLog(VERBOSE, "onPointerUp/onPointerUp");
-    if (event.getPointerCount() > 2) {
+    gestureMotionEventLog(VERBOSE, "onPointerUp");
+    if (event.getPointerId(event.getActionIndex()) != 1) {
+      // Invalid finger of split-tap
+      gestureMotionEventLog(VERBOSE, "Invalid finger of split-tap");
+      cancelGesture(event);
+      return;
+    }
+    if (event.getPointerCount() > TARGET_FINGER_COUNT) {
       gestureMotionEventLog(VERBOSE, "onPointerUp/getPointerCount=%d", event.getPointerCount());
       cancelGesture(event);
+      return;
+    }
+    if (!validatePositions(event)) {
+      gestureMotionEventLog(VERBOSE, "onPointerUp/validatePositions=false");
+      cancelGesture(event);
+      return;
+    }
+    if (pendingRestart) {
+      pendingRestart = false;
       return;
     }
     if (getState() == STATE_GESTURE_STARTED || getState() == STATE_CLEAR) {
@@ -105,7 +137,7 @@ class SecondFingerTap extends GestureMatcher {
         gestureMotionEventLog(VERBOSE, "onPointerUp/currentTaps=%d", currentTaps);
         // Done.
         completeGesture(eventId, event);
-        restart();
+        restart(false);
         startGesture(event);
       }
     } else {
@@ -122,28 +154,40 @@ class SecondFingerTap extends GestureMatcher {
     cancelGesture(event);
   }
 
+  /**
+   * Ensures the touched points when performing split-tap are not moving too far (within the
+   * touch-slop).
+   *
+   * @param event the latest MotionEvent received.
+   * @return {@code true} if successful, {@code false} otherwise.
+   */
+  private boolean validatePositions(MotionEvent event) {
+    int eventCount = event.getPointerCount();
+    if (eventCount != TARGET_FINGER_COUNT) {
+      return true;
+    }
+    for (int index = 0; index < eventCount; index++) {
+      PointF base = bases[index];
+      final float dX = base.x - event.getX(index);
+      final float dY = base.y - event.getY(index);
+      final float delta = (float) Math.hypot(dX, dY);
+      if (delta > touchSlop) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @Override
   public String getGestureName() {
-    switch (targetTaps) {
-      case 1:
-        return "Second Finger Tap";
-      case 2:
-        return "Second Finger Double Tap";
-      case 3:
-        return "Second Finger Triple Tap";
-      default:
-        return "Second Finger " + targetTaps + " Taps";
-    }
+    return switch (targetTaps) {
+      case 1 -> "Second Finger Tap";
+      default -> "Second Finger " + targetTaps + " Taps";
+    };
   }
 
   @Override
   public String toString() {
-    return super.toString()
-        + ", Taps:"
-        + currentTaps
-        + ", mBaseX: "
-        + Float.toString(baseX)
-        + ", mBaseY: "
-        + baseY;
+    return super.toString() + ", Taps:" + currentTaps + ", Bases:" + bases[0] + "," + bases[1];
   }
 }

@@ -17,16 +17,19 @@
 package com.google.android.accessibility.talkback.actor.gemini;
 
 import static com.google.android.accessibility.talkback.actor.gemini.DataFieldUtils.FINISH_REASON_STOP;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.Action.UNKNOWN;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.text.TextUtils;
+import android.util.Base64;
 import com.google.android.accessibility.talkback.actor.gemini.DataFieldUtils.GeminiResponse;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiActor.GeminiEndpoint;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiActor.GeminiResponseListener;
+import com.google.android.accessibility.talkback.actor.gemini.GeminiCommand.CommonRequest;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiRestRequestPerformer.GeminiRestResponseCallback;
 import com.google.android.accessibility.utils.NetworkUtils;
 import com.google.android.accessibility.utils.SharedPreferencesUtils;
@@ -87,8 +90,31 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
       Bitmap screenshotCapture,
       boolean manualTrigger,
       GeminiResponseListener geminiResponseListener) {
+    return createRequestGeminiCommand(
+        new CommonRequest(
+            UNKNOWN,
+            command,
+            DataFieldUtils.encodeImageToByteArray(screenshotCapture),
+            manualTrigger,
+            geminiResponseListener));
+  }
+
+  @Override
+  public boolean createRequestGeminiCommand(GeminiCommand command) {
     LogUtils.v(TAG, "createRequestGeminiCommand - %s", model);
-    if (!checkGeminiAvailability(command, screenshotCapture, geminiResponseListener)) {
+    String text;
+    byte[] imageByteArray;
+    GeminiResponseListener geminiResponseListener;
+    if (command instanceof GeminiCommand.CommonRequest commonRequest) {
+      text = commonRequest.getText();
+      imageByteArray = commonRequest.getScreenshot();
+      geminiResponseListener = commonRequest.getListener();
+    } else {
+      LogUtils.v(TAG, "Not a common request - Return.");
+      return false;
+    }
+
+    if (!checkGeminiAvailability(text, imageByteArray, geminiResponseListener)) {
       return false;
     }
 
@@ -102,7 +128,7 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
               safetyThresholdDangerousContent);
 
       // Encode screenshot in base64
-      String encodedImage = DataFieldUtils.encodeImage(screenshotCapture);
+      String encodedImage = Base64.encodeToString(imageByteArray, Base64.NO_WRAP);
       if (TextUtils.isEmpty(encodedImage)) {
         LogUtils.e(TAG, "Bitmap compression failed!");
         geminiResponseListener.onError(ErrorReason.BITMAP_COMPRESSION_FAIL);
@@ -110,7 +136,7 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
       }
 
       JSONObject postData =
-          DataFieldUtils.createPostDataJson(prefixPrompt + command, encodedImage, safetySettings);
+          DataFieldUtils.createPostDataJson(prefixPrompt + text, encodedImage, safetySettings);
 
       String urlTarget = TextUtils.isEmpty(urlWithApiKey) ? url : urlWithApiKey;
       requestPerformer.performRequest(
@@ -124,7 +150,7 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
                 geminiResponseListener.onResponse(FinishReason.STOP, response.text());
                 LogUtils.v(TAG, "Gemini succeeds");
               } else { // Redefine the hint of these kinds when the use cases are understood.
-                geminiResponseListener.onResponse(FinishReason.ERROR_BLOCKED, /* text= */ null);
+                geminiResponseListener.onResponse(FinishReason.ERROR_BLOCKED, /* response= */ null);
                 LogUtils.v(
                     TAG,
                     "Gemini finishes by some reason:%s",
@@ -137,7 +163,7 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
             @Override
             public void onFailure(String reason) {
               LogUtils.w(TAG, "ErrorResponse processing Gemini request:%s", reason);
-              geminiResponseListener.onResponse(FinishReason.ERROR_RESPONSE, /* text= */ null);
+              geminiResponseListener.onResponse(FinishReason.ERROR_RESPONSE, /* response= */ null);
             }
 
             @Override
@@ -164,7 +190,7 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
   }
 
   private boolean checkGeminiAvailability(
-      String command, Bitmap screenshotCapture, GeminiResponseListener geminiResponseListener) {
+      String command, byte[] imageByteArray, GeminiResponseListener geminiResponseListener) {
     if (!isSupported()) {
       LogUtils.d(TAG, "Gemini API is not supported");
       geminiResponseListener.onError(ErrorReason.UNSUPPORTED);
@@ -177,7 +203,7 @@ public class GeminiRestEndpoint implements GeminiEndpoint {
       return false;
     }
 
-    if (screenshotCapture == null) {
+    if (imageByteArray == null || imageByteArray.length == 0) {
       LogUtils.d(TAG, "screenshot is not provided.");
       geminiResponseListener.onError(ErrorReason.NO_IMAGE);
       return false;

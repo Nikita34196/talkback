@@ -54,13 +54,22 @@ public class BrailleDisplay implements BrailleDisplayForTalkBack, BrailleDisplay
   }
 
   @Override
-  public void onReadingControlChanged(CharSequence readingControlDescription) {}
+  public void onReadingControlSettingsChanged(CharSequence readingControlDescription) {}
+
+  @Override
+  public void onReadingControlValueChanged() {}
 
   @Override
   public void onImeVisibilityChanged(boolean visible) {}
 
   @Override
   public void switchBrailleDisplayOnOrOff() {}
+
+  @Override
+  public void toggleBrailleContractedMode() {}
+
+  @Override
+  public void toggleBrailleOnScreenOverlay() {}
 
   @Override
   public void showOnDisplay(ResultForDisplay result) {}

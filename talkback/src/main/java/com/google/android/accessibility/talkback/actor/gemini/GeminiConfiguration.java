@@ -30,6 +30,10 @@ public final class GeminiConfiguration {
     return "";
   }
 
+  public static String getQnaSupportLocales(Context context) {
+    return "";
+  }
+
   static String getPrefixPrompt(Context context) {
     return "";
   }
@@ -50,8 +54,12 @@ public final class GeminiConfiguration {
     return "BLOCK_LOW_AND_ABOVE";
   }
 
-  public static boolean isServerSideGeminiImageCaptioningEnabled(Context context) {
+  public static boolean isScreenQnaActionsEnabled(Context context) {
     return false;
+  }
+
+  public static boolean isServerSideGeminiImageCaptioningEnabled(Context context) {
+    return true;
   }
 
   public static boolean isOnDeviceGeminiImageCaptioningEnabled(Context context) {
@@ -59,6 +67,34 @@ public final class GeminiConfiguration {
   }
 
   public static boolean useAratea(Context context) {
+    return false;
+  }
+
+  public static boolean imageQnaEnabled(Context context) {
+    return GeminiFunctionUtils.isSystemLocaleSupportQna(context);
+  }
+
+  /**
+   * If true, use the separate screen overview endpoint for rich screen overviews. If false, just
+   * pipe the screenshot into the Image Q&A.
+   */
+  public static boolean screenOverviewEndpointEnabled(Context context) {
+    return false;
+  }
+
+  public static boolean screenOverviewEnabled(Context context) {
+    return GeminiFunctionUtils.isSystemLocaleSupportQna(context);
+  }
+
+  public static int imageQnaTypingSizeLimit(Context context) {
+    return 1000;
+  }
+
+  public static int imageQnaQuestionSizeLimit(Context context) {
+    return 10000;
+  }
+
+  public static boolean supportGeminiByFormFactor() {
     return false;
   }
 }

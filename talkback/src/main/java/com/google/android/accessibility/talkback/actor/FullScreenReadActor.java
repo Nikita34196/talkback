@@ -16,6 +16,8 @@
 
 package com.google.android.accessibility.talkback.actor;
 
+import static com.google.android.accessibility.talkback.Feedback.EditText.Action.END_SELECT;
+import static com.google.android.accessibility.talkback.Feedback.EditText.Action.START_SELECT;
 import static com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED;
 import static com.google.android.accessibility.utils.input.CursorGranularity.DEFAULT;
 import static com.google.android.accessibility.utils.traversal.TraversalStrategy.SEARCH_FOCUS_FORWARD;
@@ -259,9 +261,16 @@ public class FullScreenReadActor {
     interrupt(false);
   }
 
+  /** Stops any pending continuous reading mode. */
+  public void stopContinuousReadingMode() {
+    setReadingState(STATE_STOPPED);
+  }
+
   /** Ignore the pause speech and reset the continuous reading pause node. */
   public void ignore() {
-    if (pausedNode != null) {
+    @Nullable AccessibilityNodeInfoCompat currentFocused =
+        accessibilityFocusMonitor.getAccessibilityFocus(/* useInputFocusIfEmpty= */ false);
+    if (pausedNode != null && !pausedNode.equals(currentFocused)) {
       previousState = currentState;
       speechController.ignorePause();
       pausedNode = null;
@@ -335,24 +344,59 @@ public class FullScreenReadActor {
    * compare it with the current focused node. If they are not the same, it should be pause action,
    * otherwise, it could be a resume.
    */
-  public void pauseOrResumeContinuousReadingState() {
-    if (!isActive() && !isPreviousActive()) {
-      return;
-    }
-
+  public void pauseOrResumeContinuousReadingState(boolean doPause) {
     @Nullable AccessibilityNodeInfoCompat currentFocused =
         accessibilityFocusMonitor.getAccessibilityFocus(/* useInputFocusIfEmpty= */ false);
     if (currentFocused == null) {
       return;
     }
 
-    if (currentFocused.equals(pausedNode)) {
+    if (doPause) { // || !currentFocused.equals(pausedNode)) {
+      pausedNode = currentFocused;
+    } else {
       pausedNode = null;
       if (isPreviousActive() && speechController.isContinuousReadingPaused()) {
         setReadingState(STATE_READING_FROM_NEXT);
       }
+    }
+  }
+
+  public void setSelectionModeEnabled(EventId eventId) {
+    AccessibilityNodeInfoCompat node = getSelectTextFocus(eventId);
+    if (node == null) {
+      return;
+    }
+
+    if (!pipeline.returnFeedback(eventId, Feedback.edit(node, START_SELECT))) {
+      pipeline.returnFeedback(eventId, Feedback.sound(R.raw.complete));
+      interrupt(/* internal= */ true);
+    }
+  }
+
+  public void setSelectionModeDisabled(EventId eventId) {
+    AccessibilityNodeInfoCompat node = getSelectTextFocus(eventId);
+    if (node == null) {
+      return;
+    }
+
+    if (!pipeline.returnFeedback(eventId, Feedback.edit(node, END_SELECT))) {
+      pipeline.returnFeedback(eventId, Feedback.sound(R.raw.complete));
+      interrupt(/* internal= */ true);
+    }
+  }
+
+  private @Nullable AccessibilityNodeInfoCompat getSelectTextFocus(EventId eventId) {
+    @Nullable AccessibilityNodeInfoCompat node =
+        accessibilityFocusMonitor.getAccessibilityFocus(/* useInputFocusIfEmpty= */ true);
+    if (AccessibilityNodeInfoUtils.isTextSelectable(node)) {
+      return node;
+    }
+    node = accessibilityFocusMonitor.getEditingNodeFromFocusedKeyboard(node);
+    if (node != null) {
+      return node;
     } else {
-      pausedNode = currentFocused;
+      pipeline.returnFeedback(eventId, Feedback.speech(service.getString(R.string.not_selectable)));
+      return null;
     }
   }
 

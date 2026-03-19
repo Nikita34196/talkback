@@ -7,7 +7,7 @@
   <string name="value_stream_system">Süsteemi heli</string>
   <string name="value_stream_ring">Helin</string>
   <string name="value_stream_music">Muusika</string>
-  <string name="value_stream_alarm">Alarm</string>
+  <string name="value_stream_alarm">Äratus</string>
   <string name="value_stream_notification">Märguanne</string>
   <string name="value_stream_dtmf">Toonvalimine</string>
   <string name="value_stream_accessibility">Juurdepääsetavus</string>

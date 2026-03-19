@@ -25,7 +25,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.StringRes;
 import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.actor.DimScreenActor;
 import com.google.android.accessibility.talkback.dialog.BaseDialog;
+import com.google.android.accessibility.utils.SharedPreferencesUtils;
 
 /** A dialog to accept or reject to opt-in detailed image description. */
 public abstract class GeminiOptInDialog extends BaseDialog {
@@ -33,6 +35,7 @@ public abstract class GeminiOptInDialog extends BaseDialog {
   private static final String TAG = "GeminiOptInDialog";
   private final int dialogMessageResId;
   private final boolean showSummary;
+
 
   /** Gemini is requested in what situation. The field is used by {@link #getCustomizedView()}. */
   public GeminiOptInDialog(
@@ -58,8 +61,7 @@ public abstract class GeminiOptInDialog extends BaseDialog {
 
   @SuppressLint("InflateParams")
   @Override
-  public View getCustomizedView() {
-    LayoutInflater inflater = LayoutInflater.from(context);
+  public View getCustomizedView(LayoutInflater inflater) {
     final ScrollView root =
         (ScrollView) inflater.inflate(R.layout.detail_image_description_promotion_dialog, null);
     if (!showSummary) {
@@ -75,9 +77,13 @@ public abstract class GeminiOptInDialog extends BaseDialog {
       int spanIndexStart = rawText.indexOf(tos);
       if (spanIndexStart >= 0) {
         text.setSpan(
-            GeminiFunctionUtils.createClickableSpanForGeminiTOS(context, this),
+            GeminiFunctionUtils.createClickableSpanForGeminiTOS(
+                context,
+                this,
+                DimScreenActor.isDimScreenEnabled(
+                    context, SharedPreferencesUtils.getSharedPreferences(context))),
             spanIndexStart,
-            rawText.length(),
+            spanIndexStart + tos.length(),
             0);
       }
       textView.setText(text);

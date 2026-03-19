@@ -21,9 +21,16 @@ import static java.util.stream.Collectors.toMap;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.net.Uri;
+import android.text.TextPaint;
+import android.text.TextUtils;
 import android.text.style.ClickableSpan;
 import android.view.View;
+import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
+import androidx.core.os.ConfigurationCompat;
+import androidx.core.os.LocaleListCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.talkback.ActorState;
 import com.google.android.accessibility.talkback.Feedback;
@@ -38,16 +45,21 @@ import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import com.google.common.collect.ImmutableList;
 import java.lang.ref.WeakReference;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Utils class that provides common methods that provide Gemini opt-in information. */
 public class GeminiFunctionUtils {
-  // If the 1st time pop up of opt-in Gemini dialog is not dismissed by either [OK], or [No thanks],
+  // If the opt-in Gemini dialog is dismissed by [No thanks] for less than the value, the dialog
+  // still has a chance to inform user of "Detailed image description".
+  public static final int GEMINI_REPEAT_OPT_IN_CONFIRMED_COUNT = 1;
+  // If the pop up of opt-in Gemini dialog is not dismissed by either [OK], or [No thanks],
   // the dialog will have a second chance to inform user of "Detailed image description".
-  public static final int GEMINI_REPEAT_OPT_IN_COUNT = 1;
+  public static final int GEMINI_REPEAT_OPT_IN_POP_COUNT = 2;
   private static final String TAG = "GeminiFunctionUtils";
   private static final String GEMINI_TOS_URL = "https://policies.google.com/terms";
 
@@ -68,7 +80,7 @@ public class GeminiFunctionUtils {
     Decision aiCoreReady;
     Decision networkAvailable;
     Decision serverSideGeminiOptedIn;
-    Decision serverSideGeminiRejected;
+    Decision hasRejectedServerSideGemini;
     Decision onDeviceGeminiOptedIn;
 
     DescribeImageDecision(
@@ -77,14 +89,14 @@ public class GeminiFunctionUtils {
         Decision aiCoreReady,
         Decision networkAvailable,
         Decision serverSideGeminiOptedIn,
-        Decision serverSideGeminiRejected,
+        Decision hasRejectedServerSideGemini,
         Decision onDeviceGeminiOptedIn) {
       this.index = index;
       this.aiCoreSupport = aiCoreSupport;
       this.aiCoreReady = aiCoreReady;
       this.networkAvailable = networkAvailable;
       this.serverSideGeminiOptedIn = serverSideGeminiOptedIn;
-      this.serverSideGeminiRejected = serverSideGeminiRejected;
+      this.hasRejectedServerSideGemini = hasRejectedServerSideGemini;
       this.onDeviceGeminiOptedIn = onDeviceGeminiOptedIn;
     }
   }
@@ -587,6 +599,9 @@ public class GeminiFunctionUtils {
           .collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue));
   private static WeakReference<ImageCaptioner> imageCaptioner;
 
+  // Keep the predefined locale list which specify the locales are well supported in Gemini.
+  @VisibleForTesting static Map<String, Boolean> supportLanguages;
+
   private GeminiFunctionUtils() {}
 
   public static void setImageCaptioner(ImageCaptioner imageCaptioner) {
@@ -595,6 +610,15 @@ public class GeminiFunctionUtils {
 
   private static boolean matchDecisionWithConfiguration(Decision decision, boolean configuration) {
     return decision == Decision.DONT_CARE || (decision == Decision.VALID) == configuration;
+  }
+
+  // Decide whether to show the promote dialog according to whether user has accepted/rejected in
+  // the promote dialog.
+  private static boolean dontShowPromoteDialog(Context context, SharedPreferences prefs) {
+    return prefs.getInt(context.getString(R.string.pref_gemini_repeat_opt_in_count_key), 0)
+            >= GEMINI_REPEAT_OPT_IN_CONFIRMED_COUNT
+        || prefs.getInt(context.getString(R.string.pref_gemini_repeat_opt_in_pop_key), 0)
+            >= GEMINI_REPEAT_OPT_IN_POP_COUNT;
   }
 
   public static Feedback.Part.Builder getPreferredImageDescriptionFeedback(
@@ -625,9 +649,7 @@ public class GeminiFunctionUtils {
                   R.string.pref_auto_on_devices_image_description_key,
                   R.bool.pref_auto_on_device_image_description_default))
           && matchDecisionWithConfiguration(
-              decision.serverSideGeminiRejected,
-              prefs.getInt(context.getString(R.string.pref_gemini_repeat_opt_in_count_key), 0)
-                  >= GEMINI_REPEAT_OPT_IN_COUNT)) {
+              decision.hasRejectedServerSideGemini, dontShowPromoteDialog(context, prefs))) {
         candidates = decisionMap.get(decision);
         LogUtils.d(TAG, "getPreferredImageDescriptionFeedback/decision index:%d", decision.index);
         break;
@@ -650,7 +672,36 @@ public class GeminiFunctionUtils {
     return null;
   }
 
-  public static ClickableSpan createClickableSpanForGeminiTOS(Context context, BaseDialog dialog) {
+  public static Feedback.Part.Builder getPreferredScreenOverviewFeedback(
+      Context context, @Nullable AccessibilityNodeInfoCompat node) {
+
+    SharedPreferences prefs = SharedPreferencesUtils.getSharedPreferences(context);
+
+    if (node == null) {
+      return null;
+    }
+    if (SharedPreferencesUtils.getBooleanPref(
+        prefs,
+        context.getResources(),
+        R.string.pref_opt_in_screen_overview_key,
+        R.bool.pref_opt_in_screen_overview_default)) {
+      return Feedback.performScreenOverview(node);
+    } else {
+      return Feedback.performGeminiOptInForScreenOverview(node);
+    }
+  }
+
+  /**
+   * Creates a clickable span for the Gemini TOS.
+   *
+   * @param context The context.
+   * @param dialog The dialog.
+   * @param isDimming Whether the screen is dimming, which will change the color of the span to
+   *     black if true.
+   * @return The clickable span.
+   */
+  public static ClickableSpan createClickableSpanForGeminiTOS(
+      Context context, BaseDialog dialog, boolean isDimming) {
     return new ClickableSpan() {
       @Override
       public void onClick(View widget) {
@@ -660,30 +711,73 @@ public class GeminiFunctionUtils {
         context.startActivity(intent);
         dialog.dismissDialog();
       }
+
+      @Override
+      public void updateDrawState(@NonNull TextPaint ds) {
+        super.updateDrawState(ds);
+        if (isDimming) {
+          ds.setColor(Color.BLACK);
+        }
+      }
     };
   }
 
-  private static boolean isDetailedImageDescriptionEnabled(Context context) {
-    SharedPreferences prefs = SharedPreferencesUtils.getSharedPreferences(context);
-    return SharedPreferencesUtils.getBooleanPref(
-        prefs,
-        context.getResources(),
-        R.string.pref_detailed_image_description_key,
-        R.bool.pref_detailed_image_description_default);
+  /**
+   * Checks whether the system locale supports Q&A via Gemini.
+   *
+   * @param context The context.
+   * @return Whether the system locale supports Q&A.
+   */
+  public static boolean isSystemLocaleSupportQna(Context context) {
+    if (supportLanguages == null || supportLanguages.isEmpty()) {
+      buildSupportLocaleList(context);
+    }
+
+    LocaleListCompat locales =
+        ConfigurationCompat.getLocales(context.getResources().getConfiguration());
+    Locale locale = locales.get(0);
+    if (locale == null || TextUtils.isEmpty(locale.getLanguage())) {
+      // Fall back to use default (primary) locale.
+      locale = Locale.getDefault();
+    }
+    String language = locale.getLanguage();
+    Boolean supported = supportLanguages.get(language);
+    if (supported == null) {
+      return (supportLanguages.get("*") != null);
+    }
+    return supported;
   }
 
-  /**
-   * This method provides the decision whether the Gemini opt-in dialog should be popped up. To
-   * avoid annoying the user, TalkBack would not pop up the dialog when 1. User has acknowledged the
-   * query by clicking either the positive or negative button, or 2. The dialog has been dismissed
-   * for GEMINI_REPEAT_OPT_IN_COUNT times.
-   */
-  private static boolean needAnnounceToOptInGemini(Context context) {
-    if (isDetailedImageDescriptionEnabled(context)) {
-      return false;
+  public static void clearSupportLocaleList() {
+    supportLanguages = null;
+  }
+
+  private static void buildSupportLocaleList(Context context) {
+    if (supportLanguages != null) {
+      return;
     }
-    SharedPreferences prefs = SharedPreferencesUtils.getSharedPreferences(context);
-    String repeatOptInCountKey = context.getString(R.string.pref_gemini_repeat_opt_in_count_key);
-    return prefs.getInt(repeatOptInCountKey, 0) < GEMINI_REPEAT_OPT_IN_COUNT;
+
+    supportLanguages = new HashMap<>();
+    String locales = GeminiConfiguration.getQnaSupportLocales(context);
+    LogUtils.v(TAG, "Gemini support locales:%s", locales);
+    try {
+      String[] languages = locales.split(",");
+      for (String language : languages) {
+        String strippedLanguage = language.strip();
+        if (strippedLanguage.charAt(0) == '*') {
+          // Wild card to match all languages
+          supportLanguages.put(strippedLanguage, true);
+        } else if (strippedLanguage.charAt(0) == '!') {
+          // Specify the exception list in which the locales are not supported. (Highest priority)
+          supportLanguages.put(new Locale(strippedLanguage.substring(1)).getLanguage(), false);
+        } else {
+          supportLanguages.put(new Locale(strippedLanguage).getLanguage(), true);
+        }
+      }
+    } catch (Exception e) {
+      LogUtils.v(TAG, "Parsing locales exception:%s", e.toString());
+      supportLanguages.clear();
+      supportLanguages.put(new Locale("en").getLanguage(), true);
+    }
   }
 }

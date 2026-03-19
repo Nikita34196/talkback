@@ -38,6 +38,7 @@ import com.google.android.accessibility.talkback.interpreters.SubtreeChangeEvent
 import com.google.android.accessibility.talkback.interpreters.UiChangeEventInterpreter;
 import com.google.android.accessibility.utils.Performance.EventId;
 import com.google.android.accessibility.utils.input.HeadsUpNotificationEventInterpreter;
+import com.google.android.accessibility.utils.input.NonmodalAlertEventInterpreter;
 import com.google.android.accessibility.utils.input.ScrollEventInterpreter;
 import com.google.android.accessibility.utils.input.SelectionEventInterpreter;
 import com.google.android.accessibility.utils.input.TextEventInterpretation;
@@ -68,6 +69,7 @@ public class Interpreters {
   private final AccessibilityEventIdleInterpreter accessibilityEventIdleInterpreter;
   private final UiChangeEventInterpreter uiChangeEventInterpreter;
   @Nullable private final HeadsUpNotificationEventInterpreter notificationEventInterpreter;
+  @Nullable private final NonmodalAlertEventInterpreter nonmodalAlertEventInterpreter;
 
   private final int eventTypeMask; // Union of all sub-interpreter masks
 
@@ -93,7 +95,8 @@ public class Interpreters {
       SubtreeChangeEventInterpreter subtreeChangeEventInterpreter,
       AccessibilityEventIdleInterpreter accessibilityEventIdleInterpreter,
       UiChangeEventInterpreter uiChangeEventInterpreter,
-      HeadsUpNotificationEventInterpreter notificationEventInterpreter) {
+      HeadsUpNotificationEventInterpreter notificationEventInterpreter,
+      NonmodalAlertEventInterpreter nonmodalAlertEventInterpreter) {
 
     this.inputFocusInterpreter = inputFocusInterpreter;
     this.scrollEventInterpreter = scrollEventInterpreter;
@@ -112,6 +115,7 @@ public class Interpreters {
     this.accessibilityEventIdleInterpreter = accessibilityEventIdleInterpreter;
     this.uiChangeEventInterpreter = uiChangeEventInterpreter;
     this.notificationEventInterpreter = notificationEventInterpreter;
+    this.nonmodalAlertEventInterpreter = nonmodalAlertEventInterpreter;
 
     // Event-interpreters are chained:
     // scrollEventInterpreter -> manualScrollInterpreter -> accessibilityFocusInterpreter
@@ -138,7 +142,7 @@ public class Interpreters {
                 .input(
                     interpretation.eventId,
                     interpretation.event,
-                    new Interpretation.HeadsUpNotificationChange(interpretation.notificationGuess));
+                    new Interpretation.NonmodalAlertChange(interpretation.notificationGuess));
             if (interpretation.isHeadsUpAppearance) {
               pipelineInterpretations
                   .get()
@@ -147,6 +151,31 @@ public class Interpreters {
                       interpretation.event,
                       new Interpretation.CompositorID(
                           Compositor.EVENT_HEADS_UP_NOTIFICATION_APPEARED));
+            }
+          });
+    }
+
+    if (nonmodalAlertEventInterpreter != null) {
+      nonmodalAlertEventInterpreter.addListener(
+          (interpretation) -> {
+            if (((interpretation.alertAppeared && interpretation.actionable)
+                || !interpretation.alertAppeared)) {
+              pipelineInterpretations
+                  .get()
+                  .input(
+                      interpretation.eventId,
+                      interpretation.event,
+                      new Interpretation.NonmodalAlertChange(interpretation.alert));
+            }
+            if (interpretation.alertAppeared && interpretation.actionable) {
+              pipelineInterpretations
+                  .get()
+                  .input(
+                      interpretation.eventId,
+                      interpretation.event,
+                      new Interpretation.CompositorID(
+                          Compositor.EVENT_ACTIONABLE_NONMODAL_ALERT_APPEARED),
+                      null);
             }
           });
     }
@@ -164,6 +193,9 @@ public class Interpreters {
             | hintEventInterpreter.getEventTypes()
             | ((passThroughModeInterpreter != null)
                 ? passThroughModeInterpreter.getEventTypes()
+                : 0)
+            | ((nonmodalAlertEventInterpreter != null)
+                ? nonmodalAlertEventInterpreter.getEventTypes()
                 : 0);
   }
 
@@ -247,6 +279,11 @@ public class Interpreters {
     if (notificationEventInterpreter != null) {
       if (notificationEventInterpreter.matches(event)) {
         notificationEventInterpreter.onAccessibilityEvent(event, eventId);
+      }
+    }
+    if (nonmodalAlertEventInterpreter != null) {
+      if (nonmodalAlertEventInterpreter.matches(event)) {
+        nonmodalAlertEventInterpreter.onAccessibilityEvent(event, eventId);
       }
     }
   }

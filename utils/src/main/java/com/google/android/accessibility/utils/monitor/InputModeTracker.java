@@ -71,7 +71,7 @@ public class InputModeTracker implements ServiceKeyEventListener {
   @Override
   public boolean onKeyEvent(KeyEvent event, EventId eventId) {
     // Wear device should ignore the input mode of the internal input device.
-    if (FormFactorUtils.getInstance().isAndroidWear()) {
+    if (FormFactorUtils.isAndroidWear()) {
       InputDevice inputDevice = InputDevice.getDevice(event.getDeviceId());
       if (inputDevice != null && !inputDevice.isExternal()) {
         return false;

@@ -20,6 +20,7 @@ import android.accessibilityservice.AccessibilityService;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.braille.interfaces.ScreenReaderActionPerformer.ScreenReaderAction;
 import com.google.android.accessibility.utils.FocusFinder;
+import com.google.android.accessibility.utils.monitor.CollectionState;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /** Exposes some TalkBack behavior to BrailleDisplay. */
@@ -58,6 +59,18 @@ public interface TalkBackForBrailleDisplay {
   /** Returns keyboard status. */
   boolean isOnscreenKeyboardActive();
 
+  /** Returns whether browse mode is enabled. */
+  boolean isBrowseMode();
+
+  /** Returns whether browse mode flag is enabled. */
+  boolean isBrowseModeFlagEnabled();
+
+  /** Launches TalkBack keyboard settings. */
+  void launchTalkBackKeyboardSettings();
+
+  /** Returns whether table navigation is enabled. */
+  boolean isTableNavigationEnabled();
+
   /**
    * Returns active onscreen keyboard window name.
    *
@@ -77,4 +90,7 @@ public interface TalkBackForBrailleDisplay {
 
   /** Switches to next input method. */
   boolean switchToNextInputMethod();
+
+  /** Returns the collection state. */
+  CollectionState getCollectionState();
 }

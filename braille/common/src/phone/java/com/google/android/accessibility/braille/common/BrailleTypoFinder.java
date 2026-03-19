@@ -56,7 +56,7 @@ public class BrailleTypoFinder {
   public boolean updateTypoCorrectionFrom(Context context, @FocusType int focusType) {
     clear();
     switch (focusType) {
-      case FOCUS_ACCESSIBILITY:
+      case FOCUS_ACCESSIBILITY -> {
         AccessibilityNodeInfoCompat node = focusFinder.findAccessibilityFocus();
         if (node != null
             && node.isFocused()
@@ -64,10 +64,13 @@ public class BrailleTypoFinder {
           return obtainSuggestions(context, node);
         }
         return false;
-      case FOCUS_INPUT:
+      }
+      case FOCUS_INPUT -> {
         return obtainSuggestions(context, focusFinder.findFocusCompat(FOCUS_INPUT));
-      default:
+      }
+      default -> {
         return false;
+      }
     }
   }
 

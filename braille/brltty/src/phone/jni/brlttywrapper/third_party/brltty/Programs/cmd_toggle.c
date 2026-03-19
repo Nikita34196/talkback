@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -221,6 +221,10 @@ handleToggleCommands (int command, void *data) {
 
     case BRL_CMD_ASPK_SEL_LINE:
       togglePreferenceSetting(&prefs.autospeakSelectedLine, command);
+      break;
+
+    case BRL_CMD_ASPK_EMP_LINE:
+      togglePreferenceSetting(&prefs.autospeakEmptyLine, command);
       break;
 
     case BRL_CMD_ASPK_SEL_CHAR:

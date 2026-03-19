@@ -54,7 +54,7 @@
   <string name="voice_commands_Spell">Lletreja</string>
   <string name="voice_commands_talkback_settings">Configuració de TalkBack</string>
   <string name="voice_commands_talkback_setting">Configuració de TalkBack</string>
-  <string name="voice_commands_screen_search">Cerca directa</string>
+  <string name="voice_commands_screen_search">Cerca en pantalla</string>
   <string name="voice_commands_search_on_screen">Cerca en pantalla</string>
   <string name="voice_commands_copy">@android:string/copy</string>
   <string name="voice_commands_cut">@android:string/cut</string>
@@ -77,7 +77,7 @@
   <string name="voice_commands_quit">Surt</string>
   <string name="voice_commands_quiet">Silencia</string>
   <string name="voice_commands_pause">Posa en pausa</string>
-  <string name="voice_commands_nevermind">Cancel·la</string>
+  <string name="voice_commands_nevermind">Millor no</string>
   <string name="voice_commands_shut_up">Força el silenci</string>
   <string name="voice_commands_faster">Més ràpid</string>
   <string name="voice_commands_increase_speech_rate">Augmenta la velocitat de parla</string>

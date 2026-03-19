@@ -16,16 +16,24 @@
 
 package com.google.android.accessibility.talkback.actor.gemini;
 
+
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Pair;
+import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.actor.gemini.ui.ImageQnaChatAdapter.ImageQnaMessage;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.Queue;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -43,6 +51,7 @@ public class DataFieldUtils {
   private static final String TEXT = "text";
   private static final String SAFETY_RATINGS = "safetyRatings";
   private static final String SAFETY_SETTINGS = "safetySettings";
+  private static final String GENERATION_CONFIG = "generationConfig";
   private static final String PROMPT_FEEDBACK = "promptFeedback";
   private static final String BLOCK_REASON = "blockReason";
   private static final String CATEGORY = "category";
@@ -57,6 +66,8 @@ public class DataFieldUtils {
   private static final String HATE_SPEECH_CATEGORY = "HARM_CATEGORY_HATE_SPEECH";
   private static final String SEXUALLY_EXPLICIT_CATEGORY = "HARM_CATEGORY_SEXUALLY_EXPLICIT";
   private static final String DANGEROUS_CONTENT = "HARM_CATEGORY_DANGEROUS_CONTENT";
+  private static final String ROLE = "role";
+  private static final String USER = "user";
 
   private static final String HARM_PROBABILITY_LOW = "LOW";
   private static final String HARM_PROBABILITY_MEDIUM = "MEDIUM";
@@ -138,12 +149,18 @@ public class DataFieldUtils {
                         new JSONObject().put(MIME_TYPE, IMAGE_JPEG).put(DATA, encodedImage)));
 
     JSONObject postData = new JSONObject();
-    postData.put(CONTENTS, new JSONArray().put(0, new JSONObject().put(PARTS, parts)));
+    postData.put(
+        CONTENTS, new JSONArray().put(0, new JSONObject().put(ROLE, USER).put(PARTS, parts)));
     postData.put(SAFETY_SETTINGS, safetySettings);
+    postData.put(GENERATION_CONFIG, createGenerationConfig(/* temperature= */ 0.0));
     LogUtils.v(TAG, "Message Body JSONArray parts:%s", parts);
     LogUtils.v(TAG, "Message Body JSONArray safetySettings:%s", safetySettings);
 
     return postData;
+  }
+
+  private static JSONObject createGenerationConfig(double temperature) throws JSONException {
+    return new JSONObject().put("temperature", temperature).put("topP", 0.85).put("topK", 1);
   }
 
   public static GeminiResponse parseGeminiResponse(JSONObject response) throws JSONException {
@@ -172,16 +189,104 @@ public class DataFieldUtils {
     return resultBuilder.build();
   }
 
+  /**
+   * Appends the dialog history to the question for Image Q&A or Screen Q&A.
+   *
+   * @param context The context of the application.
+   * @param question The question to be appended with the dialog history.
+   * @param history The dialog history to be appended to the question.
+   * @param action Specifies which action the append history comes from.
+   * @return The question with the dialog history appended.
+   */
+  public static String appendHistoryToImageQna(
+      Context context, String question, List<ImageQnaMessage> history, GeminiActor.Action action) {
+    if (history.isEmpty()) {
+      return question;
+    }
+    StringBuilder result = new StringBuilder();
+    boolean isImageQnA = isActionImageQnA(action);
+    result.append(
+        context.getString(
+            isImageQnA ? R.string.image_qna_with_history : R.string.screen_qna_with_history));
+
+    ImmutableList<String> errorTexts =
+        ImmutableList.of(
+            context.getString(R.string.image_qna_voice_input_empty),
+            context.getString(R.string.image_qna_answer_unavailable));
+
+    // Generate an iterator. Start just after the last element.
+    ListIterator<ImageQnaMessage> li = history.listIterator(history.size());
+
+    int totalLen = question.length();
+    int sizeLimit = GeminiConfiguration.imageQnaQuestionSizeLimit(context);
+
+    Queue<String> deque = new ArrayDeque<>();
+    for (int i = 1; i < history.size(); i++) {
+      ImageQnaMessage message = history.get(i);
+      String text = message.getText();
+      // Remove trailing newlines from model messages for cleaner history formatting.
+      if (!TextUtils.isEmpty(text) && text.charAt(text.length() - 1) == '\n') {
+        text = text.substring(0, text.length() - 1);
+      }
+      deque.add(text);
+      totalLen += text.length();
+    }
+
+    while (totalLen >= sizeLimit) {
+      if (deque.size() <= 2) {
+        // Even the size of the last entry in the history is still too long, we need to clear the
+        // whole history.
+        // history.
+        deque.clear();
+        break;
+      }
+      // Remove the oldest user question and the server response.
+      totalLen -= deque.poll().length();
+      totalLen -= deque.poll().length();
+    }
+
+    // History index 0 is always included in chat.
+    result
+        .append("\n")
+        .append(context.getString(R.string.image_qna_answer_prefix, history.get(0).getText()));
+
+    // Append the dialog history.
+    while (!deque.isEmpty()) {
+      String content = deque.poll();
+      if (!errorTexts.contains(content)) {
+        result.append("\n").append(context.getString(R.string.image_qna_question_prefix, content));
+      }
+      content = deque.poll();
+      if (!errorTexts.contains(content)) {
+        result.append("\n").append(context.getString(R.string.image_qna_answer_prefix, content));
+      }
+    }
+
+    result.append("\n").append(context.getString(R.string.image_qna_with_history_postfix));
+    // Insert text of the user question.
+    result.append("\n").append(context.getString(R.string.image_qna_question_prefix, question));
+    result.append("\n").append(context.getString(R.string.image_qna_answer_prefix, ""));
+
+    LogUtils.v(TAG, "Composed question's size: %d", result.length());
+    return result.toString();
+  }
+
+  private static boolean isActionImageQnA(GeminiActor.Action action) {
+    return switch (action) {
+      case UNKNOWN -> true;
+      case IMAGE_DESCRIPTION -> true;
+      case SCREEN_DESCRIPTION -> false;
+      case IMAGE_QNA -> true;
+      case SCREEN_QNA -> false;
+    };
+  }
+
   private static void matchProbability(
       String category, String probability, List<Pair<String, String>> safetyReasons) {
     switch (probability) {
-      case HARM_PROBABILITY_LOW:
-      case HARM_PROBABILITY_MEDIUM:
-      case HARM_PROBABILITY_HIGH:
-        safetyReasons.add(new Pair<>(category, probability));
-        break;
-      default:
-        break;
+      case HARM_PROBABILITY_LOW, HARM_PROBABILITY_MEDIUM, HARM_PROBABILITY_HIGH ->
+          safetyReasons.add(new Pair<>(category, probability));
+      default -> {}
     }
   }
 

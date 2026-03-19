@@ -121,7 +121,7 @@
   <string name="voice_commands_help_find_text_description">ಪ್ರಸ್ತುತ ಸ್ಕ್ರೀನ್‌ನಲ್ಲಿ \"ಉಳಿಸಿ\" ಎಂಬುದನ್ನು ಒಳಗೊಂಡಿರುವ ಮೊದಲ ಐಟಂ ಅನ್ನು ಹುಡುಕಿ</string>
   <string name="voice_commands_help_find_description">\"ಉಳಿಸಿ\" ಎಂಬುದನ್ನು ಒಳಗೊಂಡಿರುವ ಮುಂದಿನ ಐಟಂಗೆ ಹೋಗಲು \"ಹುಡುಕಿ\" ಅನ್ನು ಪುನರಾವರ್ತಿಸಿ</string>
   <string name="voice_commands_help_screen_search_description">ಸ್ಕ್ರೀನ್‌ನ ಮೇಲೆ ಆ ಪಠ್ಯವನ್ನು ಹುಡುಕಲು ಹುಡುಕಾಟ ಪದವನ್ನು ನಮೂದಿಸಿ</string>
-  <string name="voice_commands_help_text_editing_description">ಪಠ್ಯವನ್ನು ಟೈಪ್ ಮಾಡಿ, ಆಯ್ಕೆ ಮಾಡಿ ಮತ್ತು ನಕಲಿಸಿ</string>
+  <string name="voice_commands_help_text_editing_description">ಪಠ್ಯವನ್ನು ಟೈಪ್ ಮಾಡಿ, ಆಯ್ಕೆ ಮಾಡಿ ಮತ್ತು ಕಾಪಿ ಮಾಡಿ</string>
   <string name="voice_commands_help_type_text">ಟೈಪ್ ಮಾಡಿ [OK]</string>
   <string name="voice_commands_help_copy_description">ನಕಲಿಸುವ ಮೊದಲು ಪಠ್ಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>
   <string name="voice_commands_help_cut_description">ಕತ್ತರಿಸುವ ಮೊದಲು ಪಠ್ಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>

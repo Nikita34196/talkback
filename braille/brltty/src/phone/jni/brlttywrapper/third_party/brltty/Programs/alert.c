@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -245,7 +245,7 @@ alert (AlertIdentifier identifier) {
         TuneBuilder *tb = getTuneBuilder();
 
         if (tb) {
-          setTuneSourceName(tuneBuilder, "alert");
+          setTuneSourceName(tb, "alert");
           setTuneSourceIndex(tb, identifier);
 
           if (parseTuneString(tb, "p100")) {
@@ -260,7 +260,7 @@ alert (AlertIdentifier identifier) {
         if (!*tune) *tune = emptyTune;
       }
 
-      tunePlayTones(*tune);
+      tunePlayTones(*tune, 0);
     } else if (prefs.alertDots && alert->tactile.duration) {
       showDotPattern(alert->tactile.pattern, alert->tactile.duration);
     } else if (prefs.alertMessages && alert->message) {

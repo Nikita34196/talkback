@@ -5,14 +5,18 @@
     android:theme="@style/A11yAlertDialogCustomViewTheme"
     android:padding="16dp"
     android:orientation="vertical">
-  <androidx.appcompat.widget.AppCompatTextView
-      android:id="@+id/dialog_content"
+  <ScrollView
       android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:paddingBottom="8dp"
-      android:paddingStart="8dp"
-      android:paddingEnd="8dp"
-      android:textAppearance="@style/A11yAlertDialogContentTextStyle"/>
+      android:layout_height="wrap_content">
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/dialog_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="8dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:textAppearance="@style/A11yAlertDialogContentTextStyle" />
+  </ScrollView>
   <CheckBox
       android:id="@+id/dont_show_again"
       android:layout_width="match_parent"

@@ -55,7 +55,7 @@ public interface TalkBackForBrailleIme {
    * BrailleIme invokes this when it becomes inactive. When TalkBack gets this signal, it should
    * restore its typical (non-IME-friendly) mode.
    */
-  void onBrailleImeInactivated(boolean usePassThrough, boolean brailleImeActive);
+  void onBrailleImeInactivated(boolean usePassThrough);
 
   /** TalkBack provides the ability to enable BrailleIme. */
   boolean setInputMethodEnabled();
@@ -87,29 +87,13 @@ public interface TalkBackForBrailleIme {
   /** Checks should braille keyboard announce character when physical mode. */
   boolean shouldAnnounceCharacterForPhysicalKeyboard();
 
-  /** Checks should braille keyboard announce password for typing. */
-  boolean shouldSpeakPassword();
-
   /** Whether use character granularity to be the moving granularity. */
   boolean shouldUseCharacterGranularity();
 
   boolean isCurrentGranularityTypoCorrection();
 
-  /** Moves the text cursor forward by current granularity from Talkback. */
-  boolean moveCursorForwardByDefault();
-
-  /** Moves the text cursor backward by current granularity from Talkback. */
-  @CanIgnoreReturnValue
-  boolean moveCursorBackwardByDefault();
-
   /** Checks the status of the screen. */
   boolean isHideScreenMode();
-
-  /** Switches to next granularity. */
-  boolean switchToNextEditingGranularity();
-
-  /** Switches to previous granularity. */
-  boolean switchToPreviousEditingGranularity();
 
   /** Resets the granularity to CHARACTER. */
   void resetGranularity();

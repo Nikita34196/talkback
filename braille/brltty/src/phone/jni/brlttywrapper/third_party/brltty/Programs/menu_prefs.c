@@ -2,7 +2,7 @@
  * BRLTTY - A background process providing access to the console screen (when in
  *          text mode) for a blind person using a refreshable braille display.
  *
- * Copyright (C) 1995-2023 by The BRLTTY Developers.
+ * Copyright (C) 1995-2024 by The BRLTTY Developers.
  *
  * BRLTTY comes with ABSOLUTELY NO WARRANTY.
  *
@@ -1137,6 +1137,12 @@ makePreferencesMenu (void) {
     {
       NAME(strtext("Speak Selected Line"));
       ITEM(newBooleanMenuItem(autospeakSubmenu, &prefs.autospeakSelectedLine, &itemName));
+      TEST(Autospeak);
+    }
+
+    {
+      NAME(strtext("Speak Empty Line"));
+      ITEM(newBooleanMenuItem(autospeakSubmenu, &prefs.autospeakEmptyLine, &itemName));
       TEST(Autospeak);
     }
 

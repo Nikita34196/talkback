@@ -372,10 +372,6 @@ public class ScrollEventInterpreter implements AccessibilityEventListener {
     long timeDiff = event.getEventTime() - autoScrollRecord.autoScrolledTime;
     LogUtils.v(TAG, "timeDiff=%d", timeDiff);
 
-    // TODO: Clean the ScrollActionRecord after we successfully handle it.
-    // The following code might have a bug that even though scrollInstanceId is the same, we might
-    // try to handle the event from previous auto-scroll when we are waiting for the event from
-    // auto-scroll, making we perform auto-scroll again. We can improve it by fixing the above bug.
     if (supportMultipleAutoScroll
         && handledScrollInstanceId == autoScrollRecord.scrollInstanceId
         && (timeDiff <= ScrollTimeout.SCROLL_TIMEOUT_LONG.getTimeoutMillis())) {

@@ -10,7 +10,7 @@
   <FrameLayout
       android:id="@+id/training_root"
       android:layout_width="match_parent"
-      android:layout_height="wrap_content"
+      android:layout_height="match_parent"
       android:background="@color/training_background_color"
       android:layout_alignParentBottom="true"
       android:importantForAccessibility="yes"/>

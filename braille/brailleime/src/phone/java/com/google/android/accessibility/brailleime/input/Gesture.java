@@ -16,6 +16,7 @@
 
 package com.google.android.accessibility.brailleime.input;
 
+import android.content.res.Resources;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 
 /** Integrates the gesture of braille keyboard. */
@@ -31,4 +32,10 @@ public interface Gesture {
 
   /** Returns a {@link Gesture} with mirroring hold dot. */
   Gesture mirrorDots();
+
+  /** Returns a description of the gesture. */
+  String getDescription(Resources resources);
+
+  /** Returns a unique id of the gesture. */
+  String getId();
 }

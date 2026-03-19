@@ -16,39 +16,88 @@
 
 package com.google.android.accessibility.talkback.actor.gemini;
 
+import static android.widget.Toast.LENGTH_SHORT;
 import static com.google.android.accessibility.talkback.PrimesController.TimerAction.GEMINI_ON_DEVICE_RESPONSE_LATENCY;
 import static com.google.android.accessibility.talkback.PrimesController.TimerAction.GEMINI_RESPONSE_LATENCY;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.BITMAP_COMPRESSION_FAIL;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.DISABLED;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.EMPTY_PROMPT;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.FEATURE_DOWNLOADING;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.NETWORK_ERROR;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.NO_IMAGE;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.ErrorReason.UNSUPPORTED;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason.ERROR_BLOCKED;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason.ERROR_NOT_FINISHED;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason.ERROR_PARSING_RESULT;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason.ERROR_RESPONSE;
+import static com.google.android.accessibility.talkback.actor.gemini.GeminiActor.FinishReason.STOP;
+import static com.google.android.accessibility.talkback.actor.gemini.ui.screenqa.ErrorMessagesKt.getErrorMessage;
+import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.GeminiFeedbackType.GEMINI_FEEDBACK_NONE;
+import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.GeminiFeedbackType.GEMINI_FEEDBACK_THUMBS_DOWN;
+import static com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.GeminiFeedbackType.GEMINI_FEEDBACK_THUMBS_UP;
 import static com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Handler;
-import android.os.Message;
 import android.os.SystemClock;
+import android.text.TextUtils;
+import android.widget.Toast;
 import androidx.annotation.StringRes;
 import com.google.android.accessibility.talkback.Feedback;
+import com.google.android.accessibility.talkback.Feedback.GeminiRequest;
+import com.google.android.accessibility.talkback.Feedback.ScreenOverviewResult;
 import com.google.android.accessibility.talkback.Pipeline;
 import com.google.android.accessibility.talkback.PrimesController;
 import com.google.android.accessibility.talkback.R;
+import com.google.android.accessibility.talkback.TalkBackService;
 import com.google.android.accessibility.talkback.actor.gemini.AiCoreEndpoint.AiFeatureDownloadCallback;
+import com.google.android.accessibility.talkback.actor.gemini.GeminiCommand.CommonRequest;
+import com.google.android.accessibility.talkback.actor.gemini.GeminiCommand.ScreenOverview;
+import com.google.android.accessibility.talkback.actor.gemini.GeminiCommand.ScreenQuery;
+import com.google.android.accessibility.talkback.actor.gemini.progress.DefaultProgressToneProvider;
+import com.google.android.accessibility.talkback.actor.gemini.progress.ProgressTonePlayer;
+import com.google.android.accessibility.talkback.actor.gemini.progress.ProgressToneProvider.Tone;
+import com.google.android.accessibility.talkback.actor.gemini.screenqa.OverviewResponse;
+import com.google.android.accessibility.talkback.actor.gemini.ui.BottomSheetResultOverlay;
+import com.google.android.accessibility.talkback.actor.gemini.ui.CaptionResultDialog;
+import com.google.android.accessibility.talkback.actor.gemini.ui.ImageQnaChatAdapter.ImageQnaMessage;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics;
+import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.GeminiChatEntry;
+import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.GeminiDescription;
+import com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType;
+import com.google.android.accessibility.talkback.imagecaption.Result;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /** GeminiActor performs Gemini commands, via {@link GeminiEndpoint}. */
 public class GeminiActor {
+
+  /** Enumerates the supported actions for requesting a Gemini command. */
+  public enum Action {
+    UNKNOWN,
+    IMAGE_DESCRIPTION,
+    SCREEN_DESCRIPTION,
+    IMAGE_QNA,
+    SCREEN_QNA
+  }
+
   /** Enumerates the possible reasons that is associated with a Gemini response. */
-  enum FinishReason {
+  public enum FinishReason {
     STOP, // Natural stop point of the model or provided stop sequence.
     ERROR_PARSING_RESULT,
     ERROR_RESPONSE,
-    ERROR_BLOCKED;
+    ERROR_BLOCKED,
+    ERROR_NOT_FINISHED
   }
 
   /** Enumerates the possible error reasons for requesting a Gemini command. */
-  enum ErrorReason {
+  public enum ErrorReason {
     UNSUPPORTED,
     DISABLED,
     NETWORK_ERROR,
@@ -56,15 +105,11 @@ public class GeminiActor {
     EMPTY_PROMPT,
     BITMAP_COMPRESSION_FAIL,
     FEATURE_DOWNLOADING,
-    JOB_CANCELLED,
+    JOB_CANCELLED
   }
 
   /** Defines a callback interface for handling responses received from Gemini server. */
-  public interface GeminiResponseListener {
-    void onResponse(FinishReason finishReason, String text);
-
-    void onError(ErrorReason errorReason);
-  }
+  public interface GeminiResponseListener extends GeminiResponseCallback<String> {}
 
   /** Defines the core contract for classes implementing a connection to Gemini server. */
   public interface GeminiEndpoint {
@@ -73,6 +118,10 @@ public class GeminiActor {
         Bitmap image,
         boolean manualTrigger,
         GeminiResponseListener geminiResponseListener);
+
+    default boolean createRequestGeminiCommand(GeminiCommand command) {
+      return false;
+    }
 
     void cancelCommand();
 
@@ -99,26 +148,31 @@ public class GeminiActor {
   }
 
   private static final String TAG = "GeminiActor";
-  private static final int MAX_EARCON_PLAY_COUNT = 12;
-  private static final int EARCON_PLAY_CYCLE = 1000; // in milli-second
-  private static final int KEEP_WAITING_TIME_SEC = 15;
+
+  private static final long KEEP_WAITING_TIME_MS = SECONDS.toMillis(35);
+
   private final Context context;
   private final GeminiEndpoint geminiEndpoint;
   private final AiCoreEndpoint aiCoreEndpoint;
   private Pipeline.FeedbackReturner pipeline;
-  private final TalkBackAnalytics analytics;
+  private TalkBackAnalytics analytics;
   private final PrimesController primesController;
   // Record the start time of Gemini request, with which TalkBack can measure the latency when the
   // Gemini response is received.
   private long startTime;
   private final Handler mainHandler;
-  private final RequestProgressToneDelayed progressToneDelayed;
+  private final ProgressTonePlayer progressTonePlayer;
+
+  private final BottomSheetResultOverlay bottomSheetResultOverlay;
 
   public final State state;
 
   private long downloadedSizeInBytes = -1;
   private long featureSizeInBytes = -1;
-  private GeminiResultDialog geminiResultDialog;
+
+  // Cached images for requesting Image Q&A.
+  private final Map<Integer, byte[]> cachedImageMap = new HashMap<>();
+
   // Record the Gemini requestId to Gemini type(Server-side/On-device) mapping. Theoretically, the
   // map would be at most only one entry. We check each time before a new entry added, and clear the
   // map when it reaches the maximum value(REQUEST_ID_MAP_CAPACITY).
@@ -140,26 +194,71 @@ public class GeminiActor {
         }
       };
 
+  /** Retrieves necessary data from clients. */
+  public interface GeminiChatMetricProcessor {
+    void sendLog(boolean isScreenDescription, List<ImageQnaMessage> collectionList);
+  }
+
+  private final GeminiChatMetricProcessor chatMetrics =
+      (isScreenDescription, collectionList) -> {
+        GeminiDescription description = null;
+        List<GeminiChatEntry> chatList = new ArrayList<>();
+        boolean isFirstEntry = true;
+        for (ImageQnaMessage collection : collectionList) {
+          if (isFirstEntry) {
+            description =
+                new GeminiDescription(
+                    isScreenDescription,
+                    collection.isThumbUp()
+                        ? GEMINI_FEEDBACK_THUMBS_UP
+                        : collection.isThumbDown()
+                            ? GEMINI_FEEDBACK_THUMBS_DOWN
+                            : GEMINI_FEEDBACK_NONE);
+            isFirstEntry = false;
+          } else {
+            chatList.add(
+                new GeminiChatEntry(
+                    isScreenDescription,
+                    collection.isThumbUp()
+                        ? GEMINI_FEEDBACK_THUMBS_UP
+                        : collection.isThumbDown()
+                            ? GEMINI_FEEDBACK_THUMBS_DOWN
+                            : GEMINI_FEEDBACK_NONE,
+                    collection.isVoiceInput(),
+                    collection.getQuestionLength()));
+          }
+        }
+        if (description != null) {
+          analytics.onGeminiChatEntry(description, chatList);
+        }
+      };
+
   public GeminiActor(
-      Context context,
+      TalkBackService service,
       TalkBackAnalytics analytics,
       PrimesController primesController,
       GeminiEndpoint geminiEndpoint,
       AiCoreEndpoint aiCoreEndpoint) {
-    this.context = context;
+    context = service;
     this.analytics = analytics;
     this.primesController = primesController;
     this.geminiEndpoint = geminiEndpoint;
     this.mainHandler = new Handler(context.getMainLooper());
-    this.progressToneDelayed =
-        new RequestProgressToneDelayed(this, MAX_EARCON_PLAY_COUNT, EARCON_PLAY_CYCLE);
+    this.progressTonePlayer =
+        new ProgressTonePlayer(
+            new DefaultProgressToneProvider(),
+            this::playTone,
+            KEEP_WAITING_TIME_MS,
+            this::onTimeout);
     this.aiCoreEndpoint = aiCoreEndpoint;
     this.aiCoreEndpoint.setAiFeatureDownloadCallback(aiFeatureDownloadCallback);
     state = new State();
+    bottomSheetResultOverlay = new BottomSheetResultOverlay(service, chatMetrics);
   }
 
   public void setPipeline(Pipeline.FeedbackReturner pipeline) {
     this.pipeline = pipeline;
+    bottomSheetResultOverlay.setPipeline(pipeline);
   }
 
   /**
@@ -169,32 +268,201 @@ public class GeminiActor {
    * @param text The text content to be included in the Gemini session.
    * @param image The image to be associated with the Gemini session.
    */
-  public void requestOnlineGeminiCommand(int requestId, String text, Bitmap image) {
-    analytics.onGeminiEvent(TalkBackAnalytics.GEMINI_REQUEST);
+  public void requestOnlineGeminiCommand(int requestId, Action action, String text, Bitmap image) {
+    if (requestIdMap.size() > REQUEST_ID_MAP_CAPACITY) {
+      LogUtils.w(TAG, "The requestIdMap reaches its max capacity.");
+      requestIdMap.clear();
+    }
+    requestIdMap.put(requestId, /* isServerSide= */ true);
+    analytics.onGeminiEvent(
+        TalkBackAnalytics.GEMINI_REQUEST, /* serverSide= */ true, /* manualRequest= */ true);
     startTime = SystemClock.uptimeMillis();
     GeminiResponseListener responseListener =
         new GeminiResponseListener() {
           @Override
           public void onResponse(FinishReason finishReason, String text) {
-            handleResponse(requestId, finishReason, text, /* manualTrigger= */ true);
+            // Instead of providing direct feedback, #handleImageCaptionResponse will send the
+            // result to the pipeline and rearrange it in ImageCaptioner. For use cases other than
+            // image captioning, we need another method to handle the result.
+            handleImageCaptionResponse(requestId, finishReason, text, /* manualTrigger= */ true);
           }
 
           @Override
           public void onError(ErrorReason errorReason) {
-            handleErrorResponse(requestId, errorReason, /* manualTrigger= */ true);
+            handleImageCaptionErrorResponse(requestId, errorReason, /* manualTrigger= */ true);
           }
         };
 
+    byte[] imageBytes = DataFieldUtils.encodeImageToByteArray(image);
     if (geminiEndpoint.createRequestGeminiCommand(
-        text, image, /* manualTrigger= */ true, responseListener)) {
+        new CommonRequest(action, text, imageBytes, /* manualTrigger= */ true, responseListener))) {
       if (requestIdMap.size() > REQUEST_ID_MAP_CAPACITY) {
         LogUtils.w(TAG, "The requestIdMap reaches its max capacity.");
         requestIdMap.clear();
       }
       requestIdMap.put(requestId, /* isServerSide= */ true);
-      progressToneDelayed.cancel();
+      progressTonePlayer.stop();
       aiCoreEndpoint.cancelCommand();
-      progressToneDelayed.post(/* playTone= */ true);
+      progressTonePlayer.play(/* playTone= */ true, /* delayPlayTone= */ false);
+      cachedImageMap.put(requestId, imageBytes);
+    }
+  }
+
+  /**
+   * Requests a new Gemini online session, utilizing the provided screen overview.
+   *
+   * @param request the request to be sent to Gemini.
+   */
+  public void requestScreenOverview(GeminiRequest request) {
+    var requestId = request.requestId();
+    var imageBytes = request.imageBytes();
+    var focusedNode = request.focusedNode();
+    var query = request.text();
+    var a11yTree = request.a11yTree();
+    if (imageBytes == null) {
+      var image = request.image();
+      if (image != null) {
+        imageBytes = DataFieldUtils.encodeImageToByteArray(image);
+      }
+      if (!image.isRecycled()) {
+        image.recycle();
+      }
+    }
+    if (imageBytes == null) {
+      LogUtils.e(TAG, "Invalid request for requestScreenOverview: required fields are null");
+      return;
+    }
+
+    if (requestIdMap.size() > REQUEST_ID_MAP_CAPACITY) {
+      LogUtils.w(TAG, "The requestIdMap reaches its max capacity.");
+      requestIdMap.clear();
+    }
+    requestIdMap.put(requestId, /* isServerSide= */ true);
+    analytics.onGeminiEvent(
+        TalkBackAnalytics.GEMINI_REQUEST, /* serverSide= */ true, /* manualRequest= */ true);
+    startTime = SystemClock.uptimeMillis();
+    var responseListener =
+        new GeminiResponseCallback<OverviewResponse>() {
+          @Override
+          public void onResponse(FinishReason finishReason, OverviewResponse response) {
+            // Instead of providing direct feedback, #handleImageCaptionResponse will send the
+            // result to the pipeline and rearrange it in ImageCaptioner. For use cases other than
+            // image captioning, we need another method to handle the result.
+            handleScreenOverviewResponse(requestId, finishReason, response);
+          }
+
+          @Override
+          public void onError(ErrorReason errorReason) {
+            handleScreenOverviewErrorResponse(requestId, errorReason);
+          }
+        };
+
+    GeminiCommand command;
+    if (TextUtils.isEmpty(query)) {
+      // if the user didn't ask anything, we just give an overview.
+      command = new ScreenOverview(imageBytes, focusedNode, responseListener);
+    } else if (a11yTree != null) {
+      command =
+          new ScreenQuery(imageBytes, a11yTree, query, request.chatHistory(), responseListener);
+    } else {
+      throw new IllegalArgumentException("Invalid GeminiRequest " + request);
+    }
+
+    if (geminiEndpoint.createRequestGeminiCommand(command)) {
+      if (requestIdMap.size() > REQUEST_ID_MAP_CAPACITY) {
+        LogUtils.w(TAG, "The requestIdMap reaches its max capacity.");
+        requestIdMap.clear();
+      }
+      requestIdMap.put(requestId, /* isServerSide= */ true);
+      progressTonePlayer.stop();
+      aiCoreEndpoint.cancelCommand();
+      progressTonePlayer.play(/* playTone= */ true, /* delayPlayTone= */ false);
+    }
+
+  }
+
+  /**
+   * Requests a new Gemini online session for image Q&A.
+   *
+   * @param text The question text from the user.
+   * @param imageBytes The image to be associated with the Gemini session.
+   */
+  public void requestImageQna(Action action, String text, byte[] imageBytes) {
+    GeminiResponseListener responseListener =
+        new GeminiResponseListener() {
+          @Override
+          public void onResponse(FinishReason finishReason, String text) {
+            // TODO: Add error handling for Gemini responses.
+            switch (finishReason) {
+              case STOP ->
+                  analytics.onGeminiEvent(
+                      TalkBackAnalytics.GEMINI_SUCCESS,
+                      /* serverSide= */ true,
+                      /* manualRequest= */ true);
+              case ERROR_PARSING_RESULT ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_PARSE_RESPONSE, /* serverSide= */ true);
+              case ERROR_RESPONSE ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_PROTOCOL_ERROR, /* serverSide= */ true);
+              case ERROR_BLOCKED ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_CONTENT_BLOCKED, /* serverSide= */ true);
+              case ERROR_NOT_FINISHED -> {
+                //  Do nothing.
+              }
+            }
+            progressTonePlayer.stop();
+            if (TextUtils.isEmpty(text)) {
+              // Response blocked.
+              text = context.getString(R.string.gemini_error_message);
+            }
+            speak(text);
+            bottomSheetResultOverlay.onImageQnaResponse(text);
+          }
+
+          @Override
+          public void onError(ErrorReason errorReason) {
+            switch (errorReason) {
+              case UNSUPPORTED ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_SERVICE_UNAVAILABLE, /* serverSide= */ true);
+              case DISABLED ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_USER_NOT_OPT_IN, /* serverSide= */ true);
+              case NETWORK_ERROR ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_NETWORK_UNAVAILABLE, /* serverSide= */ true);
+              case NO_IMAGE ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_NO_SCREENSHOT_PROVIDED, /* serverSide= */ true);
+              case BITMAP_COMPRESSION_FAIL ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_ENCODE_PICTURE, /* serverSide= */ true);
+              case EMPTY_PROMPT ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_COMMAND_NOT_PROVIDED, /* serverSide= */ true);
+              case FEATURE_DOWNLOADING -> {
+                // Do nothing
+              }
+              case JOB_CANCELLED ->
+                  analytics.onGeminiFailEvent(
+                      TalkBackAnalytics.GEMINI_FAIL_USER_ABORT, /* serverSide= */ true);
+            }
+            progressTonePlayer.stop();
+            String text = context.getString(R.string.gemini_error_message);
+            speak(text);
+            bottomSheetResultOverlay.onImageQnaResponse(text);
+          }
+        };
+
+    analytics.onGeminiEvent(
+        TalkBackAnalytics.GEMINI_REQUEST, /* serverSide= */ true, /* manualRequest= */ true);
+    if (geminiEndpoint.createRequestGeminiCommand(
+        new CommonRequest(action, text, imageBytes, /* manualTrigger= */ true, responseListener))) {
+      progressTonePlayer.stop();
+      aiCoreEndpoint.cancelCommand();
+      progressTonePlayer.play(/* playTone= */ true, /* delayPlayTone= */ false);
     }
   }
 
@@ -206,17 +474,22 @@ public class GeminiActor {
    * @param manualTrigger Whether the request is triggered by user manually.
    */
   public void requestAiCoreImageCaptioning(int requestId, Bitmap image, boolean manualTrigger) {
-    if (!aiCoreEndpoint.hasAiCore()) {
-      handleErrorResponse(requestId, ErrorReason.UNSUPPORTED, manualTrigger);
-      return;
-    }
-    // TODO: Add log for on-device AI feature.
-    analytics.onGeminiEvent(TalkBackAnalytics.GEMINI_REQUEST);
-    startTime = SystemClock.uptimeMillis();
     if (!manualTrigger
         && (aiCoreEndpoint.hasPendingTransaction() || geminiEndpoint.hasPendingTransaction())) {
       return;
     }
+    if (requestIdMap.size() > REQUEST_ID_MAP_CAPACITY) {
+      LogUtils.w(TAG, "The requestIdMap reaches its max capacity.");
+      requestIdMap.clear();
+    }
+    requestIdMap.put(requestId, /* isServerSide= */ false);
+    analytics.onGeminiEvent(
+        TalkBackAnalytics.GEMINI_REQUEST, /* serverSide= */ false, manualTrigger);
+    if (!aiCoreEndpoint.hasAiCore()) {
+      handleImageCaptionErrorResponse(requestId, UNSUPPORTED, manualTrigger);
+      return;
+    }
+    startTime = SystemClock.uptimeMillis();
     if (aiCoreEndpoint.createRequestGeminiCommand(
         context.getString(R.string.image_caption_with_gemini_prefix),
         image,
@@ -224,12 +497,12 @@ public class GeminiActor {
         new GeminiResponseListener() {
           @Override
           public void onResponse(FinishReason finishReason, String text) {
-            handleResponse(requestId, finishReason, text, manualTrigger);
+            handleImageCaptionResponse(requestId, finishReason, text, manualTrigger);
           }
 
           @Override
           public void onError(ErrorReason errorReason) {
-            handleErrorResponse(requestId, errorReason, manualTrigger);
+            handleImageCaptionErrorResponse(requestId, errorReason, manualTrigger);
           }
         })) {
       if (requestIdMap.size() > REQUEST_ID_MAP_CAPACITY) {
@@ -237,122 +510,236 @@ public class GeminiActor {
         requestIdMap.clear();
       }
       requestIdMap.put(requestId, /* isServerSide= */ false);
-      progressToneDelayed.cancel();
+      progressTonePlayer.stop();
       geminiEndpoint.cancelCommand();
-      progressToneDelayed.post(manualTrigger);
+      progressTonePlayer.play(/* playTone= */ true, /* delayPlayTone= */ !manualTrigger);
     }
+  }
+
+  public void displayImageCaptioningResultDialog(
+      int requestId,
+      Result imageDescriptionResult,
+      Result iconLabelResult,
+      Result ocrTextResult,
+      boolean isScreenDescription) {
+    byte[] image = cachedImageMap.get(requestId);
+    // Clear all caches once there is an image used by the image caption result dialog.
+    cachedImageMap.clear();
+
+    if (isScreenDescription && !GeminiConfiguration.screenOverviewEnabled(context)) {
+      LogUtils.d(TAG, "Screen description is disabled");
+      return;
+    }
+
+    if (isSupportImageQna(requestId)) {
+      mainHandler.post(
+          () ->
+              bottomSheetResultOverlay.showImageCaptionResultBottomSheet(
+                  image,
+                  imageDescriptionResult,
+                  iconLabelResult,
+                  ocrTextResult,
+                  isScreenDescription));
+    } else {
+      mainHandler.post(
+          () ->
+              new CaptionResultDialog(
+                      context, imageDescriptionResult, iconLabelResult, ocrTextResult)
+                  .showDialog());
+    }
+    if (requestIdMap.containsKey(requestId)) {
+      requestIdMap.remove(requestId);
+    }
+  }
+
+  public void displayScreenOverviewResultDialog(ScreenOverviewResult result) {
+    if (GeminiConfiguration.screenOverviewEnabled(context)) {
+      if (isSupportImageQna(result.requestId())) {
+        mainHandler.post(
+            () -> bottomSheetResultOverlay.showScreenOverviewResultBottomSheet(result));
+      } else {
+        // Dialog result without the Q&A feature.
+        if (result.response() instanceof OverviewResponse.Success overview) {
+          mainHandler.post(
+              () ->
+                  new CaptionResultDialog(
+                          context,
+                          Result.create(
+                              CaptionType.SCREEN_OVERVIEW, overview.getOverview().getSummary()))
+                      .showDialog());
+        } else if (result.response() instanceof OverviewResponse.Error error) {
+          Toast.makeText(context, getErrorMessage(error), LENGTH_SHORT).show();
+        }
+      }
+    } else {
+      Toast.makeText(
+              context,
+              context.getString(R.string.summary_pref_gemini_support_disabled),
+              LENGTH_SHORT)
+          .show();
+    }
+  }
+
+  public void requestDismissDialog() {
+    bottomSheetResultOverlay.requestDismissDialog();
+  }
+
+  public void stopProgressTones() {
+    LogUtils.d(TAG, "stopProgressTones");
+    progressTonePlayer.stopTones();
   }
 
   public void onUnbind() {
     if (aiCoreEndpoint != null) {
       aiCoreEndpoint.onUnbind();
     }
+    cachedImageMap.clear();
   }
 
-  private void playProgressTone() {
-    pipeline.returnFeedback(EVENT_ID_UNTRACKED, Feedback.sound(R.raw.volume_beep));
+  private boolean isServerSideRequest(int requestId) {
+    return requestIdMap.containsKey(requestId) && Objects.equals(requestIdMap.get(requestId), true);
   }
 
-  private void handleResponse(
+  private boolean isSupportImageQna(int requestId) {
+    if (!isServerSideRequest(requestId)) {
+      return false;
+    }
+
+    return GeminiConfiguration.imageQnaEnabled(context);
+  }
+
+  private void playTone(Tone tone) {
+    pipeline.returnFeedback(EVENT_ID_UNTRACKED, tone.tone);
+  }
+
+  private void handleImageCaptionResponse(
       int requestId, FinishReason finishReason, String text, boolean manualTrigger) {
     switch (finishReason) {
-      case STOP:
-        if (manualTrigger) {
-          mainHandler.post(
-              () -> {
-                if (geminiResultDialog != null) {
-                  geminiResultDialog.dismissDialog();
-                }
-                geminiResultDialog =
-                    new GeminiResultDialog(
-                        context,
-                        R.string.title_gemini_result_dialog,
-                        text,
-                        R.string.positive_button_gemini_result_dialog);
-                geminiResultDialog.showDialog();
-              });
-        } else {
-          responseImageCaptionResult(requestId, text, /* isSuccess= */ true, manualTrigger);
-        }
-        analytics.onGeminiEvent(TalkBackAnalytics.GEMINI_SUCCESS);
+      case STOP -> {
+        analytics.onGeminiEvent(
+            TalkBackAnalytics.GEMINI_SUCCESS, isServerSideRequest(requestId), manualTrigger);
+        responseImageCaptionResult(
+            requestId, text, /* isSuccess= */ true, STOP, /* errorReason= */ null, manualTrigger);
         PrimesController.TimerAction action = GEMINI_RESPONSE_LATENCY;
         if (requestIdMap.containsKey(requestId)
-            && Objects.equals(requestIdMap.get(requestId), Boolean.FALSE)) {
+            && Objects.equals(requestIdMap.get(requestId), false)) {
           action = GEMINI_ON_DEVICE_RESPONSE_LATENCY;
         }
         primesController.recordDuration(action, startTime, SystemClock.uptimeMillis());
-        break;
-      case ERROR_PARSING_RESULT:
+      }
+      case ERROR_PARSING_RESULT -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_PARSE_RESPONSE, isServerSideRequest(requestId));
         responseImageCaptionResult(
-            requestId, R.string.gemini_error_parsing_result, /* isSuccess= */ false, manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_PARSE_RESPONSE);
-        break;
-      case ERROR_RESPONSE:
+            requestId,
+            R.string.gemini_error_parsing_result,
+            /* isSuccess= */ false,
+            ERROR_PARSING_RESULT,
+            manualTrigger);
+      }
+      case ERROR_RESPONSE -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_PROTOCOL_ERROR, isServerSideRequest(requestId));
         responseImageCaptionResult(
-            requestId, R.string.gemini_error_message, /* isSuccess= */ false, manualTrigger);
-
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_PROTOCOL_ERROR);
-        break;
-      case ERROR_BLOCKED:
+            requestId,
+            R.string.gemini_error_message,
+            /* isSuccess= */ false,
+            ERROR_RESPONSE,
+            manualTrigger);
+      }
+      case ERROR_BLOCKED -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_CONTENT_BLOCKED, isServerSideRequest(requestId));
         responseImageCaptionResult(
-            requestId, R.string.gemini_block_message, /* isSuccess= */ false, manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_CONTENT_BLOCKED);
-        break;
+            requestId,
+            R.string.gemini_block_message,
+            /* isSuccess= */ false,
+            ERROR_BLOCKED,
+            manualTrigger);
+      }
+      case ERROR_NOT_FINISHED -> {
+        //  Do nothing.
+      }
     }
-    if (requestIdMap.containsKey(requestId)) {
+    if (finishReason != STOP && requestIdMap.containsKey(requestId)) {
+      // We don't remove the requestId from the map for the STOP (Gemini replied successfully) case,
+      // because the requestId is needed to determine the UI (either bottomsheet or dialog) style.
       requestIdMap.remove(requestId);
     }
-    progressToneDelayed.cancel();
+    progressTonePlayer.stop();
   }
 
-  private void handleErrorResponse(int requestId, ErrorReason errorReason, boolean manualTrigger) {
+  private void handleImageCaptionErrorResponse(
+      int requestId, ErrorReason errorReason, boolean manualTrigger) {
     switch (errorReason) {
-      case UNSUPPORTED:
+      case UNSUPPORTED -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_SERVICE_UNAVAILABLE, isServerSideRequest(requestId));
         responseImageCaptionResult(
-            requestId, R.string.gemini_error_message, /* isSuccess= */ false, manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_APIKEY_NOT_AVAILABLE);
-        break;
-      case DISABLED:
+            requestId,
+            R.string.gemini_error_message,
+            /* isSuccess= */ false,
+            UNSUPPORTED,
+            manualTrigger);
+      }
+      case DISABLED -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_USER_NOT_OPT_IN, isServerSideRequest(requestId));
         responseImageCaptionResult(
             requestId,
             R.string.summary_pref_gemini_support_disabled,
             /* isSuccess= */ false,
+            DISABLED,
             manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_USER_NOT_OPT_IN);
-        break;
-      case NETWORK_ERROR:
+      }
+      case NETWORK_ERROR -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_NETWORK_UNAVAILABLE, isServerSideRequest(requestId));
         responseImageCaptionResult(
-            requestId, R.string.gemini_network_error, /* isSuccess= */ false, manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_NETWORK_UNAVAILABLE);
-        break;
-      case NO_IMAGE:
+            requestId,
+            R.string.gemini_network_error,
+            /* isSuccess= */ false,
+            NETWORK_ERROR,
+            manualTrigger);
+      }
+      case NO_IMAGE -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_NO_SCREENSHOT_PROVIDED, isServerSideRequest(requestId));
         responseImageCaptionResult(
             requestId,
             R.string.gemini_screenshot_unavailable,
             /* isSuccess= */ false,
+            NO_IMAGE,
             manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_NO_SCREENSHOT_PROVIDED);
-        break;
-      case BITMAP_COMPRESSION_FAIL:
+      }
+      case BITMAP_COMPRESSION_FAIL -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_ENCODE_PICTURE, isServerSideRequest(requestId));
         responseImageCaptionResult(
             requestId,
             R.string.gemini_screenshot_unavailable,
             /* isSuccess= */ false,
+            BITMAP_COMPRESSION_FAIL,
             manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_ENCODE_PICTURE);
-        break;
-      case EMPTY_PROMPT:
+      }
+      case EMPTY_PROMPT -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_COMMAND_NOT_PROVIDED, isServerSideRequest(requestId));
         responseImageCaptionResult(
             requestId,
             context.getString(
                 R.string.voice_commands_partial_result,
                 context.getString(R.string.title_pref_help)),
             /* isSuccess= */ false,
+            EMPTY_PROMPT,
             manualTrigger);
-        analytics.onGeminiFailEvent(TalkBackAnalytics.GEMINI_FAIL_COMMAND_NOT_PROVIDED);
-        break;
-      case FEATURE_DOWNLOADING:
-        if (featureSizeInBytes > 0 && downloadedSizeInBytes >= 0) {
+      }
+      case FEATURE_DOWNLOADING -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_SERVICE_UNAVAILABLE, isServerSideRequest(requestId));
+        if (featureSizeInBytes > 0
+            && downloadedSizeInBytes >= 0
+            && (featureSizeInBytes >= downloadedSizeInBytes)) {
           long downloadedSizeInMb = downloadedSizeInBytes / (1024 * 1024);
           long sizeInMb = featureSizeInBytes / (1024 * 1024);
           responseImageCaptionResult(
@@ -362,6 +749,7 @@ public class GeminiActor {
                   downloadedSizeInMb,
                   sizeInMb),
               /* isSuccess= */ false,
+              FEATURE_DOWNLOADING,
               manualTrigger);
         } else {
           LogUtils.w(TAG, "Can't get the download progress.");
@@ -369,85 +757,160 @@ public class GeminiActor {
               requestId,
               R.string.message_aifeature_downloading,
               /* isSuccess= */ false,
+              FEATURE_DOWNLOADING,
               manualTrigger);
         }
-        break;
-      case JOB_CANCELLED:
-        // TODO: add metric for the cancelled tasks.
-        break;
+      }
+      case JOB_CANCELLED ->
+          analytics.onGeminiFailEvent(
+              TalkBackAnalytics.GEMINI_FAIL_USER_ABORT, isServerSideRequest(requestId));
     }
-    progressToneDelayed.cancel();
+    progressTonePlayer.stop();
+  }
+
+  private void handleScreenOverviewResponse(
+      int requestId, FinishReason finishReason, OverviewResponse response) {
+    switch (finishReason) {
+      case STOP -> {
+        analytics.onGeminiEvent(
+            TalkBackAnalytics.GEMINI_SUCCESS, /* serverSide= */ true, /* manualRequest= */ true);
+        responseScreenOverviewResult(requestId, response);
+      }
+      case ERROR_PARSING_RESULT -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_PARSE_RESPONSE, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, response);
+      }
+      case ERROR_RESPONSE -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_PROTOCOL_ERROR, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, response);
+      }
+      case ERROR_BLOCKED -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_CONTENT_BLOCKED, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, response);
+      }
+      case ERROR_NOT_FINISHED -> {
+        //  Do nothing.
+      }
+    }
+    if (requestIdMap.containsKey(requestId)) {
+      requestIdMap.remove(requestId);
+    }
+    progressTonePlayer.stop();
   }
 
   private void speak(CharSequence text) {
     pipeline.returnFeedback(EVENT_ID_UNTRACKED, Feedback.speech(text));
   }
 
-  private void responseImageCaptionResult(
-      int requestId, @StringRes int textId, boolean isSuccess, boolean manualTrigger) {
-    responseImageCaptionResult(requestId, context.getString(textId), isSuccess, manualTrigger);
+  private void handleScreenOverviewErrorResponse(int requestId, ErrorReason errorReason) {
+    switch (errorReason) {
+      case UNSUPPORTED -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_SERVICE_UNAVAILABLE, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, new OverviewResponse.Error(errorReason, null));
+      }
+      case DISABLED -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_USER_NOT_OPT_IN, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, new OverviewResponse.Error(errorReason, null));
+      }
+      case NETWORK_ERROR -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_NETWORK_UNAVAILABLE, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, new OverviewResponse.Error(errorReason, null));
+      }
+      case NO_IMAGE -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_NO_SCREENSHOT_PROVIDED, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, new OverviewResponse.Error(errorReason, null));
+      }
+      case BITMAP_COMPRESSION_FAIL -> {
+        analytics.onGeminiFailEvent(
+            TalkBackAnalytics.GEMINI_FAIL_FAIL_TO_ENCODE_PICTURE, /* serverSide= */ true);
+        responseScreenOverviewResult(requestId, new OverviewResponse.Error(errorReason, null));
+      }
+      case JOB_CANCELLED ->
+          analytics.onGeminiFailEvent(
+              TalkBackAnalytics.GEMINI_FAIL_USER_ABORT, /* serverSide= */ true);
+      default -> {}
+    }
+    progressTonePlayer.stop();
   }
 
   private void responseImageCaptionResult(
-      int requestId, String text, boolean isSuccess, Boolean manualTrigger) {
-    // For manual trigger the result doesn't integrate with other image captioning module(OCR, icon
-    // detection) yet, so speak the result directly.
-    if (manualTrigger) {
-      speak(text);
-    } else {
-      // Send the result to ImageCaptioner to integrate the resul with OCR and Icon detection.
-      pipeline.returnFeedback(
-          EVENT_ID_UNTRACKED,
-          Feedback.responseImageCaptionResult(
-              requestId, text, isSuccess, /* manualTrigger= */ false));
-    }
+      int requestId,
+      @StringRes int textId,
+      boolean isSuccess,
+      ErrorReason errorReason,
+      boolean manualTrigger) {
+    responseImageCaptionResult(
+        requestId,
+        context.getString(textId),
+        isSuccess,
+        ERROR_NOT_FINISHED,
+        errorReason,
+        manualTrigger);
   }
 
-  private static class RequestProgressToneDelayed extends Handler {
-    private final int playCountLimit;
-    private final int delay;
-    private int playCount;
-    private final GeminiActor parent;
-    private boolean playTone;
+  private void responseImageCaptionResult(
+      int requestId,
+      @StringRes int textId,
+      boolean isSuccess,
+      FinishReason finishReason,
+      boolean manualTrigger) {
+    responseImageCaptionResult(
+        requestId,
+        context.getString(textId),
+        isSuccess,
+        finishReason,
+        /* errorReason= */ null,
+        manualTrigger);
+  }
 
-    private static final int PLAY_TONE_CYCLE_TIME_UP = 0;
+  private void responseImageCaptionResult(
+      int requestId,
+      String text,
+      boolean isSuccess,
+      ErrorReason errorReason,
+      boolean manualTrigger) {
+    responseImageCaptionResult(
+        requestId, text, isSuccess, ERROR_NOT_FINISHED, errorReason, manualTrigger);
+  }
 
-    public RequestProgressToneDelayed(GeminiActor parent, int playCountLimit, int delay) {
-      this.parent = parent;
-      this.delay = delay;
-      this.playCountLimit = playCountLimit;
+  private void responseImageCaptionResult(
+      int requestId,
+      String text,
+      boolean isSuccess,
+      FinishReason finishReason,
+      ErrorReason errorReason,
+      Boolean manualTrigger) {
+    if (!isSuccess) {
+      // No need to cache the image for fail result.
+      cachedImageMap.remove(requestId);
     }
+    // Send the result to ImageCaptioner to integrate the resul with OCR and Icon detection, and
+    // recycle images.
+    pipeline.returnFeedback(
+        EVENT_ID_UNTRACKED,
+        Feedback.responseImageCaptionResult(
+            requestId, text, isSuccess, finishReason, errorReason, manualTrigger));
+  }
 
-    private void post(boolean playTone) {
-      removeMessages(PLAY_TONE_CYCLE_TIME_UP);
-      playCount = 0;
-      this.playTone = playTone;
-      if (playTone) {
-        parent.playProgressTone();
-      }
-      sendEmptyMessageDelayed(PLAY_TONE_CYCLE_TIME_UP, delay);
-    }
+  private void responseScreenOverviewResult(
+      int requestId, @StringRes int textId, boolean isSuccess, ErrorReason errorReason) {
+    responseScreenOverviewResult(requestId, new OverviewResponse.Error(errorReason, null));
+  }
 
-    @Override
-    public void handleMessage(Message msg) {
-      if (msg.what == PLAY_TONE_CYCLE_TIME_UP) {
-        // TODO: This comparison counts on the cycle(EARCON_PLAY_CYCLE) of playing tone is exactly
-        // one second. If the requirement changed to others (such as 500ms) then the value will be
-        // affected. It's necessary to redesign this part to adapt the cycle time change.
-        if (++playCount >= KEEP_WAITING_TIME_SEC) {
-          parent.geminiEndpoint.cancelCommand();
-          parent.aiCoreEndpoint.cancelCommand();
-        } else {
-          if (playCount <= playCountLimit && playTone) {
-            parent.playProgressTone();
-          }
-          sendEmptyMessageDelayed(PLAY_TONE_CYCLE_TIME_UP, delay);
-        }
-      }
-    }
+  private void responseScreenOverviewResult(int requestId, OverviewResponse response) {
+    pipeline.returnFeedback(
+        EVENT_ID_UNTRACKED, Feedback.responseScreenOverviewResult(requestId, response));
+  }
 
-    public void cancel() {
-      removeMessages(PLAY_TONE_CYCLE_TIME_UP);
-    }
+  private void onTimeout() {
+    geminiEndpoint.cancelCommand();
+    aiCoreEndpoint.cancelCommand();
   }
 }

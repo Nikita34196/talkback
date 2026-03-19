@@ -1,7 +1,7 @@
 /*
  * libbrlapi - A library providing access to braille terminals for applications.
  *
- * Copyright (C) 2002-2023 by
+ * Copyright (C) 2002-2024 by
  *   Samuel Thibault <Samuel.Thibault@ens-lyon.org>
  *   Sébastien Hinderer <Sebastien.Hinderer@ens-lyon.org>
  *
@@ -342,6 +342,8 @@ extern "C" {
 #define BRLAPI_KEY_CMD_COMPBRL6 (BRLAPI_KEY_CMD(0) + 154)
 /** reset preferences to defaults */
 #define BRLAPI_KEY_CMD_PREFRESET (BRLAPI_KEY_CMD(0) + 155)
+/** set autospeak empty line on/off */
+#define BRLAPI_KEY_CMD_ASPK_EMP_LINE (BRLAPI_KEY_CMD(0) + 156)
 /** bring screen cursor to character */
 #define BRLAPI_KEY_CMD_ROUTE BRLAPI_KEY_CMD(1)
 /** start new clipboard at character */
@@ -456,6 +458,8 @@ extern "C" {
 #define BRLAPI_KEY_FLG_GUI BRLAPI_KEY_FLG(0X20)
 /** prefix with escape */
 #define BRLAPI_KEY_FLG_ESCAPED BRLAPI_KEY_FLG(0X40)
+/** capslock key pressed */
+#define BRLAPI_KEY_FLG_CAPSLOCK BRLAPI_KEY_FLG(0X80)
 /** it is a release scan code */
 #define BRLAPI_KEY_FLG_KBD_RELEASE BRLAPI_KEY_FLG(0X0100)
 /** it is an emulation 0 scan code */

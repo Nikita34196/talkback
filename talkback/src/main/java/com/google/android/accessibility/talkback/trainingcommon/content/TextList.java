@@ -59,7 +59,7 @@ public class TextList extends PageContentConfig {
       LayoutInflater inflater, ViewGroup container, Context context, ServiceData data) {
     final View view = inflater.inflate(R.layout.training_text_list, container, false);
     final NonScrollableListView listView = view.findViewById(R.id.training_text_list);
-    final String[] titles = context.getResources().getStringArray(titlesResId);
+    final String[] titles = getTitles(context);
     final String[] summaries;
     if (summariesResId == ID_NULL) {
       summaries = new String[titles.length];
@@ -71,6 +71,14 @@ public class TextList extends PageContentConfig {
     listView.setDividerHeight(
         context.getResources().getDimensionPixelSize(R.dimen.training_list_item_padding));
     return view;
+  }
+
+  protected String[] getTitles(Context context) {
+    return context.getResources().getStringArray(titlesResId);
+  }
+
+  protected String[] getSummaries(Context context) {
+    return context.getResources().getStringArray(summariesResId);
   }
 
   private static class TextListAdapter extends BaseAdapter {

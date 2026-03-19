@@ -43,7 +43,7 @@
   <string name="voice_commands_label">Označi</string>
   <string name="voice_commands_cannot_label_feedback">Ne može se označiti</string>
   <string name="voice_commands_assistant">Asistent</string>
-  <string name="voice_commands_first">Prvo</string>
+  <string name="voice_commands_first">Prva stavka</string>
   <string name="voice_commands_top">Pri vrhu</string>
   <string name="voice_commands_last">Zadnje</string>
   <string name="voice_commands_bottom">Pri dnu</string>

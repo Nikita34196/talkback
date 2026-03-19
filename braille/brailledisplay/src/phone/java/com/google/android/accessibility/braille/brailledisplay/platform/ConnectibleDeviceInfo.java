@@ -27,6 +27,7 @@ public class ConnectibleDeviceInfo {
   public final boolean isRemembered;
   public final boolean isConnecting;
   public final boolean isConnected;
+  public final boolean isAvailable;
   public final ConnectableDevice device;
 
   public ConnectibleDeviceInfo(
@@ -35,17 +36,20 @@ public class ConnectibleDeviceInfo {
       boolean isRemembered,
       boolean isConnecting,
       boolean isConnected,
+      boolean isAvailable,
       ConnectableDevice device) {
     this.deviceName = deviceName;
     this.deviceAddress = deviceAddress;
     this.isRemembered = isRemembered;
     this.isConnecting = isConnecting;
     this.isConnected = isConnected;
+    this.isAvailable = isAvailable;
     this.device = device;
   }
 
-  public boolean hasConnectableDevice() {
-    return device != null;
+  /** Returns whether the device is available and connectable. */
+  public boolean isAvailable() {
+    return isAvailable;
   }
 
   public boolean isConnectingOrConnected() {
@@ -61,7 +65,12 @@ public class ConnectibleDeviceInfo {
       return false;
     }
     ConnectibleDeviceInfo rowDevice = (ConnectibleDeviceInfo) o;
-    return deviceName.equals(rowDevice.deviceName) && Objects.equals(device, rowDevice.device);
+    return deviceName.equals(rowDevice.deviceName)
+        && deviceAddress.equals(rowDevice.deviceAddress)
+        && isRemembered == rowDevice.isRemembered
+        && isConnecting == rowDevice.isConnecting
+        && isConnected == rowDevice.isConnected
+        && Objects.equals(device, rowDevice.device);
   }
 
   @Override
@@ -76,7 +85,7 @@ public class ConnectibleDeviceInfo {
         + String.format("%-30s", deviceName)
         + '\''
         + ", "
-        + (device != null ? "Vis" : "***")
+        + (isAvailable ? "Vis" : "***")
         + ", "
         + (isRemembered ? "Rem" : "***")
         + ", "

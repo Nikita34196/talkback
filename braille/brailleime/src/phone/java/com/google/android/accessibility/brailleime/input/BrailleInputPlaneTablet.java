@@ -148,7 +148,8 @@ public class BrailleInputPlaneTablet extends BrailleInputPlane {
     return screenSize;
   }
 
+  /** Change the direction of the swipe from device-facing to user-facing. */
   private Swipe getReorientedSwipe(Swipe swipe) {
-    return isTableTopMode ? Swipe.createFromMirror(swipe) : new Swipe(swipe);
+    return isTableTopMode ? new Swipe(swipe) : Swipe.createFromMirror(swipe);
   }
 }

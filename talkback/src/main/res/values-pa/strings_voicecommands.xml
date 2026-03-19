@@ -98,7 +98,7 @@
   <string name="voice_commands_no_next_control_feedback">ਕੋਈ ਅਗਲਾ ਕੰਟਰੋਲ ਨਹੀਂ</string>
   <string name="voice_commands_no_next_landmark_feedback">ਕੋਈ ਅਗਲਾ ਭੂਮੀ ਚਿੰਨ੍ਹ ਨਹੀਂ</string>
   <string name="voice_commands_help_title">ਅਵਾਜ਼ੀ ਆਦੇਸ਼ ਦੀ ਰੂਪ-ਰੇਖਾ</string>
-  <string name="voice_commands_help_description">ਅਵਾਜ਼ੀ ਆਦੇਸ਼ਾਂ ਦੀ ਵਰਤੋਂ ਕਰਨ ਲਈ, ਸੱਜੇ ਪਾਸੇ ਫਿਰ ਉੱਪਰ ਵੱਲ ਸਵਾਈਪ ਕਰੋ। ਆਦੇਸ਼ਾਂ ਦੀ ਇਸ ਸੂਚੀ ਲਈ ਕਿਸੇ ਵੀ ਵੇਲੇ \"%1$s\" ਜਾਂ \"ਮੈਂ ਕੀ ਕਹਾਂ?\" ਕਹੋ।</string>
+  <string name="voice_commands_help_description">ਅਵਾਜ਼ੀ ਆਦੇਸ਼ਾਂ ਦੀ ਵਰਤੋਂ ਕਰਨ ਲਈ, ਸੱਜੇ ਪਾਸੇ ਫਿਰ ਉੱਪਰ ਵੱਲ ਸਵਾਈਪ ਕਰਕੇ ਆਦੇਸ਼ਾਂ ਦੀ ਇਸ ਸੂਚੀ ਲਈ ਕਿਸੇ ਵੀ ਵੇਲੇ \"%1$s\" ਜਾਂ \"ਮੈਂ ਕੀ ਕਹਾਂ?\" ਕਹੋ।</string>
   <string name="voice_commands_help_hint">ਬਿਹਤਰ ਨਤੀਜਿਆਂ ਲਈ, ਅੱਗੇ ਦਿੱਤੀਆਂ ਸਕ੍ਰੀਨਾਂ \'ਤੇ ਸੂਚੀਬੱਧ ਸ਼ਬਦ ਨੂੰ ਸਹੀ ਢੰਗ ਨਾਲ ਬੋਲੋ।</string>
   <string name="voice_command_screen_locked_hint">ਸਕ੍ਰੀਨ ਲਾਕ ਹੋਣ \'ਤੇ ਅਵਾਜ਼ੀ ਆਦੇਸ਼ ਉਪਲਬਧ ਨਹੀਂ ਹੁੰਦੇ ਹਨ। ਇਸਦੀ ਬਜਾਏ, %1$s ਦੀ ਮਦਦ ਨਾਲ TalkBack ਮੀਨੂ ਵਰਤੋ।</string>
   <string name="voice_commands_during_setup_hint">ਸੈੱਟਅੱਪ ਦੌਰਾਨ ਅਵਾਜ਼ੀ ਆਦੇਸ਼ ਉਪਲਬਧ ਨਹੀਂ ਹੁੰਦੇ।</string>

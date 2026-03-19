@@ -17,7 +17,7 @@
 package com.google.android.accessibility.talkback.dynamicfeature;
 
 import android.content.Context;
-import com.google.android.accessibility.utils.caption.ImageCaptionUtils.CaptionType;
+import com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 
@@ -49,6 +49,8 @@ public interface Downloader {
     INSTALLING,
     /** Installation is complete. */
     INSTALLED,
+    /** The libraries have been downloaded and uninstalled but maybe haven't been deleted. */
+    UNINSTALLED,
   }
 
   /** The current state of a download request. */
@@ -98,10 +100,10 @@ public interface Downloader {
   String getModuleName(CaptionType captionType);
 
   /** Requests to download libraries. */
-  void download(String... name);
+  void download(Context context, String... name);
 
   /** Requests to uninstall libraries. */
-  void uninstall(String... name);
+  void uninstall(Context context, String... name);
 
   /** Check if there is a library that is downloading. */
   boolean isDownloading(String name);
@@ -125,8 +127,11 @@ public interface Downloader {
   void updateAllDownloadStatus();
 
   /**
-   * Installs libraries to allow immediate access to the code and resource of the downloaded
-   * libraries.
+   * Installs libraries for the specific {@link CaptionType} to allow immediate access to the code
+   * and resource of the downloaded libraries.
    */
-  void install(Context context);
+  boolean install(Context context, CaptionType captionType);
+
+  /** Initializes the downloader. */
+  void initialize(Context context);
 }

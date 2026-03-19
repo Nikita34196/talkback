@@ -72,6 +72,8 @@
     <string-array name="shortcut_reading_control">
         <item>@string/shortcut_read_from_top</item>
         <item>@string/shortcut_read_from_current</item>
+        <item>@string/title_repeat_last_spoken_phrase</item>
+        <item>@string/title_spell_last_spoken_phrase</item>
         <item>@string/shortcut_pause_or_resume_feedback</item>
         <item>@string/shortcut_toggle_voice_feedback</item>
         <item>@string/shortcut_show_language_options</item>
@@ -81,6 +83,8 @@
     <string-array name="shortcut_value_reading_control">
         <item>@string/shortcut_value_read_from_top</item>
         <item>@string/shortcut_value_read_from_current</item>
+        <item>@string/shortcut_value_repeat_last_spoken_phrase</item>
+        <item>@string/shortcut_value_spell_last_spoken_phrase</item>
         <item>@string/shortcut_value_pause_or_resume_feedback</item>
         <item>@string/shortcut_value_toggle_voice_feedback</item>
         <item>@string/shortcut_value_show_language_options</item>
@@ -161,6 +165,9 @@
     <bool name="pref_show_navigation_menu_landmarks_default">false</bool>
     <bool name="pref_show_navigation_menu_window_default">false</bool>
     <bool name="pref_show_navigation_menu_container_default">false</bool>
+    <bool name="pref_show_navigation_menu_row_column_default">false</bool>
+    <bool name="pref_show_navigation_menu_row_default">false</bool>
+    <bool name="pref_show_navigation_menu_column_default">false</bool>
 
     <bool name="pref_selector_actions_default">false</bool>
     <bool name="pref_selector_granularity_lines_default">false</bool>

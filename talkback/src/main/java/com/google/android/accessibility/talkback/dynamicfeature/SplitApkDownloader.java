@@ -16,12 +16,12 @@
 
 package com.google.android.accessibility.talkback.dynamicfeature;
 
-import static com.google.android.accessibility.utils.caption.ImageCaptionUtils.CaptionType.ICON_LABEL;
-import static com.google.android.accessibility.utils.caption.ImageCaptionUtils.CaptionType.IMAGE_DESCRIPTION;
+import static com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType.ICON_LABEL;
+import static com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType.IMAGE_DESCRIPTION;
 
 import android.content.Context;
 import androidx.annotation.Nullable;
-import com.google.android.accessibility.utils.caption.ImageCaptionUtils.CaptionType;
+import com.google.android.accessibility.talkback.imagecaption.ImageCaptionUtils.CaptionType;
 import com.google.common.collect.ImmutableList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,24 +51,27 @@ public class SplitApkDownloader implements Downloader {
     if (instance == null) {
       instance = new SplitApkDownloader(context);
     }
+    instance.updateAllDownloadStatus();
     return instance;
   }
 
   @Override
   public String getModuleName(CaptionType captionType) {
     switch (captionType) {
-      case ICON_LABEL:
+      case ICON_LABEL -> {
         return "fake_icon_detection_module_name";
-      case IMAGE_DESCRIPTION:
+      }
+      case IMAGE_DESCRIPTION -> {
         return "fake_image_description_module_name";
-      default:
+      }
+      default -> {}
     }
     return "";
   }
 
   /** Creates a request to install the module. */
   @Override
-  public void download(String... moduleNames) {
+  public void download(Context context, String... moduleNames) {
     ImmutableList<String> moduleNameList = ImmutableList.of(moduleNames[0]);
     DownloadState fakeStateInstalled =
         DownloadState.create(
@@ -85,7 +88,7 @@ public class SplitApkDownloader implements Downloader {
 
   /** Uninstalls the module. */
   @Override
-  public void uninstall(String... moduleName) {
+  public void uninstall(Context context, String... moduleName) {
     // do nothing.
   }
 
@@ -147,5 +150,10 @@ public class SplitApkDownloader implements Downloader {
   }
 
   @Override
-  public void install(Context context) {}
+  public boolean install(Context context, CaptionType captionType) {
+    return true;
+  }
+
+  @Override
+  public void initialize(Context context) {}
 }

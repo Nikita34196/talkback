@@ -16,12 +16,17 @@
 
 package com.google.android.accessibility.utils.output;
 
+import static android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
+
 import android.content.Context;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextUtils;
+import android.text.style.TtsSpan;
 import androidx.annotation.IntDef;
+import androidx.annotation.VisibleForTesting;
 import androidx.core.util.Pair;
+import com.google.android.accessibility.utils.EmojiUtils;
 import com.google.android.accessibility.utils.R;
 import com.google.android.accessibility.utils.SpannableUtils;
 import com.google.common.collect.ImmutableMap;
@@ -33,13 +38,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.checker.nullness.qual.PolyNull;
 
 /** Utilities for cleaning up speech text. */
-public class SpeechCleanupUtils {
+public final class SpeechCleanupUtils {
   /** The regular expression used to match consecutive identical characters */
-  // Double escaping of regex characters is required. "\\1" refers to the
-  // first capturing group between the outer nesting of "[]"s.
+  // Double escaping of regex characters is required. "\\1\\1\\1" refers to the
+  // third capturing group between the outer nesting of "[]"s.
   // When the text contains any repeat of special characters, the collapse function applies.
   private static final String CONSECUTIVE_CHARACTER_REGEX =
-      "([\\-\\\\/|!@#$%^&*\\(\\)=_+\\[\\]\\{\\}.?;'\":<>\\u2022])\\1+";
+      "("
+          + "[\\-\\\\/|!@#$%^&*\\(\\)=_+\\[\\]\\{\\}.?;'\":<>\\u2022]" // punctuation and symbols
+          + "|"
+          + EmojiUtils.EMOJI_REGEX // Emoji
+          + ")"
+          + "\\1\\1\\1+"; // Backreference \1 requires the identical character to repeat 3+ times
 
   /** The Pattern used to match consecutive identical characters */
   private static final Pattern CONSECUTIVE_CHARACTER_PATTERN =
@@ -130,6 +140,7 @@ public class SpeechCleanupUtils {
               .put(']', new Pair<>(R.string.symbol_square_bracket_right, MOST))
               .put('√', new Pair<>(R.string.symbol_square_root, MOST))
               .put('™', new Pair<>(R.string.symbol_trademark, MOST))
+              .put('✓', new Pair<>(R.string.symbol_check_mark, MOST))
               .put('_', new Pair<>(R.string.symbol_underscore, MOST))
               .put('|', new Pair<>(R.string.symbol_vertical_bar, MOST))
               .put('¬', new Pair<>(R.string.symbol_not_sign, MOST))
@@ -231,6 +242,10 @@ public class SpeechCleanupUtils {
               .put('\u0652', new Pair<>(R.string.symbol_sukun, MOST))
               .buildOrThrow();
 
+  // TODO fine tune the parameters later
+  private static final int SHORTEN_TEXT_LENGTH_THRESHOLD = 100;
+  private static final int SHORTEN_TEXT_OFFSET = 20;
+
   /**
    * Cleans up text for speech. Converts symbols to their spoken equivalents.
    *
@@ -243,21 +258,19 @@ public class SpeechCleanupUtils {
       CharSequence textAfterTrim = SpannableUtils.trimText(text);
       int trimmedLength = textAfterTrim.length();
       if (trimmedLength == 1) {
-        CharSequence textAfterCleanUp = getCleanValueFor(context, textAfterTrim.charAt(0));
-
+        String textAfterCleanUp = getCleanValueFor(context, textAfterTrim.charAt(0));
         // Return the text as it is if it remains the same after clean up so
         // that any Span information is not lost
         if (TextUtils.equals(textAfterCleanUp, textAfterTrim)) {
           return textAfterTrim;
         }
-
         // Retaining Spans that might have got stripped during cleanUp
-        CharSequence formattedText = retainSpans(text, textAfterCleanUp);
-        return formattedText;
-
+        return retainSpans(text, textAfterCleanUp);
       } else if (trimmedLength == 0 && text.length() > 0) {
         // For example, just spaces.
-        return getCleanValueFor(context, text.toString().charAt(0));
+        String textAfterCleanUp = getCleanValueFor(context, text.toString().charAt(0));
+        // Retaining Spans that might have got stripped during cleanUp
+        return retainSpans(text, textAfterCleanUp);
       }
     }
     return text;
@@ -288,7 +301,8 @@ public class SpeechCleanupUtils {
    * @param text The text to process
    * @return The text with consecutive identical characters collapsed
    */
-  public static @Nullable CharSequence collapseRepeatedCharacters(
+  @VisibleForTesting
+  static @Nullable CharSequence collapseRepeatedCharacters(
       Context context, @Nullable CharSequence text) {
     if (TextUtils.isEmpty(text)) {
       return null;
@@ -296,30 +310,49 @@ public class SpeechCleanupUtils {
 
     // TODO: Add tests
     Matcher matcher = CONSECUTIVE_CHARACTER_PATTERN.matcher(text);
+    SpannableString spannable = new SpannableString(text);
     while (matcher.find()) {
-      final String replacement =
-          context.getString(
-              R.string.character_collapse_template,
-              matcher.group().length(),
-              getCleanValueFor(context, matcher.group().charAt(0)));
-      final int matchFromIndex = matcher.end() - matcher.group().length() + replacement.length();
-      text = matcher.replaceFirst(replacement);
+      final String replacement;
+      int charUnicode = matcher.group().codePointAt(0);
+      String unicodeString = new String(Character.toChars(charUnicode));
+      if (EmojiUtils.findEmoji(unicodeString).find()) {
+        // Divide length by 2 because an Emoji UTF-16 has two-char length.
+        int len = matcher.group().length() / 2;
+        // TODO: Add emoji postfix feedback for repeated emojis.
+        replacement = context.getString(R.string.character_collapse_template, len, unicodeString);
+      } else {
+        replacement =
+            context.getString(
+                R.string.character_collapse_template,
+                matcher.group().length(),
+                getCleanValueFor(context, matcher.group().charAt(0)));
+      }
+      final int matchFromIndex = matcher.end();
+
+      // Add TtsSpan for the collapsed text. Then "copy last spoken phrase" action would provide the
+      // raw text that is useful for URL link.
+      TtsSpan ttsSpan = new TtsSpan.TextBuilder(replacement).build();
+      spannable.setSpan(ttsSpan, matcher.start(), matcher.end(), SPAN_EXCLUSIVE_EXCLUSIVE);
+
       matcher = CONSECUTIVE_CHARACTER_PATTERN.matcher(text);
       matcher.region(matchFromIndex, text.length());
     }
 
-    return text;
+    return spannable;
   }
 
   /**
-   * Convenience method that feeds the given text through {@link #collapseRepeatedCharacters} and
-   * then {@link #cleanUp}.
+   * Returns the result of {@code collapseRepeatedCharacters} and {@code cleanUp}.
+   *
+   * @param context Context for retrieving resources
+   * @param text The text to process
+   * @param countRepeatedSymbols If the text should count repeated symbols
    */
   public static @Nullable CharSequence collapseRepeatedCharactersAndCleanUp(
-      Context context, @Nullable CharSequence text) {
-    CharSequence collapsed = collapseRepeatedCharacters(context, text);
-    CharSequence cleanedUp = cleanUp(context, collapsed);
-    return cleanedUp;
+      Context context, @Nullable CharSequence text, boolean countRepeatedSymbols) {
+    return countRepeatedSymbols
+        ? cleanUp(context, collapseRepeatedCharacters(context, text))
+        : cleanUp(context, text);
   }
 
   /** Returns the "clean" value for the specified character. */
@@ -365,4 +398,30 @@ public class SpeechCleanupUtils {
     }
     return null;
   }
+
+  /**
+   * Returns the shorten-text feedback that would help to reduce speech verbosity. If the text
+   * length is lower than the threshold, it returns the source text.
+   *
+   * <ul>
+   *   <li>Text-Selected feedbacks,
+   * </ul>
+   *
+   * @param context the parent context
+   * @param srcText the source text
+   */
+  public static CharSequence shortenLongTextFeedback(Context context, CharSequence srcText) {
+    if (TextUtils.isEmpty(srcText)) {
+      return "";
+    }
+    int length = srcText.length();
+    if (length < SHORTEN_TEXT_LENGTH_THRESHOLD) {
+      return srcText;
+    }
+    CharSequence toSrcText = srcText.subSequence(length - SHORTEN_TEXT_OFFSET, length);
+    CharSequence fromSrcText = srcText.subSequence(0, SHORTEN_TEXT_OFFSET);
+    return context.getString(R.string.template_shorten_text, length, fromSrcText, toSrcText);
+  }
+
+  private SpeechCleanupUtils() {}
 }

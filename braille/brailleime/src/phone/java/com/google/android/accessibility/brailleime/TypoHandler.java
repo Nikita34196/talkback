@@ -31,7 +31,6 @@ import com.google.android.accessibility.braille.common.BrailleTypoFinder;
 import com.google.android.accessibility.braille.common.BrailleTypoFinder.NoTypoFocusFoundException;
 import com.google.android.accessibility.braille.common.TalkBackSpeaker;
 import com.google.android.accessibility.braille.interfaces.ScreenReaderActionPerformer.ScreenReaderAction;
-import com.google.android.accessibility.braille.interfaces.TalkBackForBrailleIme;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils.SpellingSuggestion;
 import com.google.android.accessibility.utils.FocusFinder;
 import com.google.common.collect.ImmutableList;
@@ -39,33 +38,36 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /** Class handles all the typo correction functionalities in Braille keyboard. */
 public class TypoHandler {
+  private static final String TAG = "TypoHandler";
   private static final String SEPARATOR_PERIOD = ". ";
   private static final String SPACE = " ";
   private static final int NON_INITIALIZED = -1;
-  private final TalkBackForBrailleIme talkBackForBrailleIme;
   private final TalkBackSpeaker talkBackSpeaker;
   private final Context context;
   private BrailleTypoFinder typoFinder;
-  private InputConnection inputConnection;
   private CharSequence lastCorrectedTypo;
   private int lastCorrectedTypoHeadIndex;
   private int lastCorrectedSuggestionTailIndex;
+  private final Callback callback;
 
-  public TypoHandler(
-      Context context,
-      FocusFinder focusFinder,
-      TalkBackForBrailleIme talkBackForBrailleIme,
-      TalkBackSpeaker talkBackSpeaker) {
-    this.context = context;
-    this.typoFinder = new BrailleTypoFinder(focusFinder);
-    this.talkBackForBrailleIme = talkBackForBrailleIme;
-    this.talkBackSpeaker = talkBackSpeaker;
-    clearCorrectionCache();
+  /** Callback for {@link TypoHandler}. */
+  interface Callback {
+    /** Returns the {@link InputConnection} of the current focused edit text. */
+    InputConnection getInputConnection();
+
+    /** Returns the {@link FocusFinder} to find the focused node. */
+    FocusFinder getFocusFinder();
+
+    /** Performs the {@link ScreenReaderAction} with the given arguments. */
+    boolean performAction(ScreenReaderAction action, Object... arg);
   }
 
-  /** Updates the {@link InputConnection} for current editor. */
-  public void updateInputConnection(InputConnection inputConnection) {
-    this.inputConnection = inputConnection;
+  public TypoHandler(Context context, Callback callback, TalkBackSpeaker talkBackSpeaker) {
+    this.context = context;
+    this.callback = callback;
+    this.typoFinder = new BrailleTypoFinder(callback.getFocusFinder());
+    this.talkBackSpeaker = talkBackSpeaker;
+    clearCorrectionCache();
   }
 
   /** Refreshes focused typo. */
@@ -131,9 +133,11 @@ public class TypoHandler {
       if (TextUtils.isEmpty(suggestionCandidate)) {
         // There are 2 possible causes: 1. This typo doesn't have suggestions. 2. User hasn't chosen
         // a suggestion.
+        BrailleImeLog.e(TAG, "suggestion is empty");
         return false;
       }
     } catch (NoTypoFocusFoundException e) {
+      BrailleImeLog.e(TAG, "no typo found", e);
       return false;
     }
     SpellingSuggestion spellingSuggestion = typoFinder.getSpellingSuggestion();
@@ -146,13 +150,19 @@ public class TypoHandler {
     lastCorrectedSuggestionTailIndex =
         lastCorrectedTypoHeadIndex + suggestionCandidate.length() - 1;
     typoFinder.clear();
-    return talkBackForBrailleIme.performAction(
+    return callback.performAction(
         ScreenReaderAction.TYPO_CORRECT, node, suggestionCandidate, spellingSuggestion);
   }
 
   /** Undoes last confirmed final to original typo. */
   public boolean undoConfirmSuggestion() {
+    InputConnection inputConnection = callback.getInputConnection();
+    if (inputConnection == null) {
+      BrailleImeLog.w(TAG, "inputConnection is null");
+      return false;
+    }
     if (lastCorrectedTypo == null) {
+      BrailleImeLog.w(TAG, "lastCorrectedTypo is null");
       return false;
     }
     // Replace replaced suggestion with original typo.

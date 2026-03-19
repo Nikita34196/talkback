@@ -28,14 +28,12 @@ public final class TrainingConfigMapperImpl implements TrainingConfigMapper {
   @Override
   @Nullable
   public TrainingConfig getTraining(TrainingId trainingId, @Nullable Context context) {
-    switch (trainingId) {
-      case TRAINING_ID_TUTORIAL_FOR_WATCH:
-        return WearTutorialInitiator.createTutorialForWatch();
-        // Uncomment it when wear platform supports speech recognize.
-        // case TRAINING_ID_VOICE_COMMAND_HELP_FOR_WATCH:
-        //   return VoiceCommandAndHelpConfigs.VOICE_COMMAND_HELP_FOR_WATCH;
-      default:
-        return null;
-    }
+    return switch (trainingId) {
+      case TRAINING_ID_TUTORIAL_FOR_WATCH -> WearTutorialInitiator.createTutorialForWatch(context);
+      // Uncomment it when wear platform supports speech recognize.
+      // case TRAINING_ID_VOICE_COMMAND_HELP_FOR_WATCH:
+      //   return VoiceCommandAndHelpConfigs.VOICE_COMMAND_HELP_FOR_WATCH;
+      default -> null;
+    };
   }
 }

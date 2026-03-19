@@ -84,7 +84,7 @@
   <string name="voice_commands_slower">Chậm hơn</string>
   <string name="voice_commands_decrease_speech_rate">giảm tốc độ lời nói</string>
   <string name="voice_commands_no_action">Không hỗ trợ khẩu lệnh tắt</string>
-  <string name="voice_commands_no_mic_permissions">Để sử dụng tính năng này, bạn phải cấp quyền sử dụng micrô.</string>
+  <string name="voice_commands_no_mic_permissions">Để sử dụng tính năng này, bạn phải cấp quyền truy cập micrô.</string>
   <string name="voice_commands_no_voice_recognition_ability">Rất tiếc! Tính năng này không có trên thiết bị của bạn</string>
   <string name="voice_commands_error">Đã xảy ra lỗi khi nhận dạng lệnh thoại</string>
   <string name="voice_commands_partial_result">Không thể nhận ra lệnh này. Hãy nói \"%1$s\" để xem danh sách tất cả các lệnh.</string>

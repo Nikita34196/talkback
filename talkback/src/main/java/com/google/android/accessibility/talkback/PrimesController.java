@@ -18,9 +18,12 @@ package com.google.android.accessibility.talkback;
 
 import android.app.Application;
 import android.os.SystemClock;
+import androidx.annotation.NonNull;
+import com.google.android.accessibility.talkback.logging.LatencyExtension;
+import com.google.android.accessibility.talkback.logging.LatencyExtensionWriter;
 
 /** Initialize and configures Primes to collect performance metrics. */
-public class PrimesController {
+public class PrimesController implements LatencyExtensionWriter {
 
   /** Timer for measuring latency. */
   public enum TimerAction {
@@ -47,17 +50,29 @@ public class PrimesController {
     EVENT_BASED_PERFORMING_ACTION,
     GESTURE_EVENT_LATENCY,
     TOUCH_CONTROLLER_STATE_CHANGE_LATENCY,
-    GEMINI_ON_DEVICE_RESPONSE_LATENCY
+    GEMINI_ON_DEVICE_RESPONSE_LATENCY,
+    END_TO_END_LATENCY,
+    TOUCH_EXPLORE_DELAY_TYPING_100,
+    TOUCH_EXPLORE_DELAY_TYPING_150,
+    TOUCH_EXPLORE_DELAY_TYPING_200,
+    TOUCH_EXPLORE_DELAY_TYPING_250,
+    TOUCH_EXPLORE_DELAY_100,
+    TOUCH_EXPLORE_DELAY_150,
+    TOUCH_EXPLORE_DELAY_200,
+    TOUCH_EXPLORE_DELAY_250
   }
 
   public void initialize(Application app) {}
 
   public void startTimer(TimerAction timerAction) {}
 
+  @Override
   public void startTimer(TimerAction timerAction, String id) {}
 
   public void stopTimer(TimerAction timerAction) {}
 
+  @Override
+  public void stopTimer(TimerAction timerAction, String id, LatencyExtension latencyExtension) {}
 
   public void recordDuration(TimerAction timerAction, long startMs, long endMs) {}
 
@@ -66,4 +81,11 @@ public class PrimesController {
   public long getTime() {
     return SystemClock.uptimeMillis();
   }
+
+  @Override
+  public void recordDuration(
+      @NonNull TimerAction timerAction,
+      long startMs,
+      long endMs,
+      LatencyExtension latencyExtension) {}
 }

@@ -34,6 +34,8 @@ import com.google.android.accessibility.talkback.contextmenu.AbstractOnContextMe
 import com.google.android.accessibility.talkback.contextmenu.ContextMenu;
 import com.google.android.accessibility.talkback.contextmenu.ContextMenuItem;
 import com.google.android.accessibility.talkback.contextmenu.ContextMenuItem.DeferredType;
+import com.google.android.accessibility.utils.SettingsUtils;
+import com.google.android.accessibility.utils.monitor.ScreenMonitor;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,8 +57,11 @@ public class RuleImageCaption extends NodeMenuRule {
 
   @Override
   public boolean accept(Context context, AccessibilityNodeInfoCompat node) {
-    // Manual-caption item is shown for ALL views if the device can run image caption.
-    return ImageCaptioner.supportsImageCaption(context);
+    // Manual-caption item is shown for ALL views the device's not in locked, SUW and can run image
+    // caption.
+    return !ScreenMonitor.isDeviceLocked(context)
+        && SettingsUtils.allowLinksOutOfSettings(context)
+        && ImageCaptioner.supportsImageCaption(context);
   }
 
   @Override

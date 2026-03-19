@@ -19,7 +19,10 @@ package com.google.android.accessibility.utils;
 import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 import static android.content.res.Configuration.ORIENTATION_UNDEFINED;
+import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY;
+import static com.google.android.accessibility.utils.gestures.GestureManifold.GESTURE_TOUCH_EXPLORE;
 
+import android.annotation.SuppressLint;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.SparseArray;
@@ -27,10 +30,14 @@ import android.view.Display;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import com.google.android.accessibility.utils.output.FailoverTextToSpeech.UtteranceInfoCombo;
 import com.google.android.accessibility.utils.performance.AccessibilityActionDetails;
+import com.google.android.accessibility.utils.performance.AccessibilityAttributes;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayDeque;
@@ -63,6 +70,8 @@ public class Performance {
   private static final long FEEDBACK_COMPOSED_THRESHOLD_MS = 150;
   private static final long FEEDBACK_QUEUED_THRESHOLD_MS = 1000;
   private static final long FEEDBACK_HEARD_THRESHOLD_MS = 1000;
+
+  public static final boolean TRACKING_RANGE_START = false;
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // Constants
@@ -121,7 +130,8 @@ public class Performance {
     EVENT_TYPE_ROTATE,
     EVENT_TYPE_FINGERPRINT_GESTURE,
     EVENT_TYPE_MOTION_EVENT_SOURCE,
-    EVENT_TYPE_GESTURE_DETECTION
+    EVENT_TYPE_GESTURE_DETECTION,
+    EVENT_TYPE_TALKBACK_HINT
   })
   public @interface EventTypeId {}
 
@@ -134,6 +144,8 @@ public class Performance {
   public static final int EVENT_TYPE_FINGERPRINT_GESTURE = 6;
   public static final int EVENT_TYPE_MOTION_EVENT_SOURCE = 7;
   public static final int EVENT_TYPE_GESTURE_DETECTION = 8;
+  public static final int EVENT_TYPE_TALKBACK_HINT = 9;
+
   public static final ImmutableList<String> EVENT_TYPE_NAMES =
       ImmutableList.of(
           "EVENT_TYPE_ACCESSIBILITY",
@@ -144,7 +156,21 @@ public class Performance {
           "EVENT_TYPE_ROTATE",
           "EVENT_TYPE_FINGERPRINT_GESTURE",
           "EVENT_TYPE_MOTION_EVENT_SOURCE",
-          "EVENT_TYPE_GESTURE_DETECTION");
+          "EVENT_TYPE_GESTURE_DETECTION",
+          "EVENT_TYPE_TALKBACK_HINT");
+
+  /** Event sub types for hint announced by TalkBack. */
+  @IntDef({
+    HINT_SUB_TYPE_MAGNIFICATION,
+    HINT_SUB_TYPE_TALKBACK_ON,
+  })
+  public @interface TalkBackHint {}
+
+  public static final int HINT_SUB_TYPE_MAGNIFICATION = 0;
+  public static final int HINT_SUB_TYPE_TALKBACK_ON = 1;
+
+  public static final ImmutableList<String> TALKBACK_HINT_SUB_TYPE_NAMES =
+      ImmutableList.of("HINT_SUB_TYPE_MAGNIFICATION", "HINT_SUB_TYPE_TALKBACK_ON");
 
   public static final int MOTION_EVENT_DIRECTION_UNDEFINED = 0;
   public static final int MOTION_EVENT_DIRECTION_FORWARD = 1;
@@ -189,6 +215,12 @@ public class Performance {
 
   private final List<LatencyTracker> latencyTrackers = new ArrayList<>();
 
+  /**
+   * Determines whether to log {@link AccessibilityAttributes} with given {@link AccessibilityEvent}
+   */
+  @SuppressWarnings("NonFinalStaticField")
+  private static int eventMaskForLoggingAccessibilityAttributes = 0;
+
   private static final Performance instance = new Performance();
 
   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +237,10 @@ public class Performance {
 
   public boolean getComputeStatsEnabled() {
     return computeStatsEnabled;
+  }
+
+  public static void setEventMasksForLoggingAccessibilityAttributes(int eventMask) {
+    eventMaskForLoggingAccessibilityAttributes = eventMask;
   }
 
   public void setComputeStatsEnabled(boolean computeStatsEnabled) {
@@ -239,7 +275,7 @@ public class Performance {
     String label = AccessibilityEventUtils.typeToString(event.getEventType());
     String[] labels = {label};
 
-    onEventReceived(eventId, labels);
+    onEventReceived(eventId, labels, event, /* enforceTrack= */ false);
     return eventId;
   }
 
@@ -283,6 +319,45 @@ public class Performance {
 
     onEventReceived(eventId, labels);
     return eventId;
+  }
+
+  protected void onEventReceived(@NonNull EventId eventId, String[] labels) {
+    onEventReceived(eventId, labels, null, false);
+  }
+
+  protected void onEventReceived(
+      @NonNull EventId eventId, String[] labels, AccessibilityEvent event, boolean enforceTrack) {
+    if (!enforceTrack && !trackEvents()) {
+      return;
+    }
+
+    // Create event data.
+    EventData eventData = new EventData(getTime(), getUptime(), labels, eventId);
+    if (event != null
+        && ((event.getEventType() & eventMaskForLoggingAccessibilityAttributes) != 0)) {
+      eventData.recordAccessibilityEventAttributes(event);
+    }
+
+    // Collect event data.
+    addRecentEvent(eventId, eventData);
+    trimRecentEvents(MAX_RECENT_EVENTS);
+
+    if (!computeStatsEnabled) {
+      return;
+    }
+    @StageId int prevStage = STAGE_INLINE_HANDLING - 1;
+    long prevStageLatency = getUptime() - eventId.getEventTimeMs(); // Event times are uptime.
+    allEventStats.increment(prevStageLatency);
+
+    // Increment statistics for each event label.
+    if (eventData.labels != null) {
+      int numLabels = eventData.labels.length;
+      for (int labelIndex = 0; labelIndex < numLabels; ++labelIndex) {
+        String label = eventData.labels[labelIndex];
+        Statistics stats = getOrCreateStatistics(label, prevStage);
+        stats.increment(prevStageLatency);
+      }
+    }
   }
 
   /**
@@ -330,34 +405,21 @@ public class Performance {
     return eventId;
   }
 
-  protected void onEventReceived(@NonNull EventId eventId, String[] labels) {
-    if (!trackEvents()) {
-      return;
-    }
+  /**
+   * Method to start tracking processing latency for a gesture event. Uses event type as statistics
+   * segmentation label.
+   *
+   * @param hintSubType A subtype of the hint
+   * @return An event id that can be used to track performance through later stages.
+   */
+  public EventId onHintEventReceived(@TalkBackHint int hintSubType) {
+    EventId eventId = hintSubTypeToEventId(hintSubType);
+    String label = TALKBACK_HINT_SUB_TYPE_NAMES.get(hintSubType);
+    String[] labels = {label};
 
-    // Create event data.
-    EventData eventData = new EventData(getTime(), getUptime(), labels, eventId);
-
-    // Collect event data.
-    addRecentEvent(eventId, eventData);
-    trimRecentEvents(MAX_RECENT_EVENTS);
-
-    if (!computeStatsEnabled) {
-      return;
-    }
-    @StageId int prevStage = STAGE_INLINE_HANDLING - 1;
-    long prevStageLatency = getUptime() - eventId.getEventTimeMs(); // Event times are uptime.
-    allEventStats.increment(prevStageLatency);
-
-    // Increment statistics for each event label.
-    if (eventData.labels != null) {
-      int numLabels = eventData.labels.length;
-      for (int labelIndex = 0; labelIndex < numLabels; ++labelIndex) {
-        String label = eventData.labels[labelIndex];
-        Statistics stats = getOrCreateStatistics(label, prevStage);
-        stats.increment(prevStageLatency);
-      }
-    }
+    // Hint events could be generated before the tracker is added. So we enforce to track the event.
+    onEventReceived(eventId, labels, null, /* enforceTrack= */ true);
+    return eventId;
   }
 
   /**
@@ -384,6 +446,10 @@ public class Performance {
 
   public EventId toEventId(int displayId, MotionEvent motionEvent) {
     return new EventId(getUptime(), EVENT_TYPE_GESTURE_DETECTION, 0, displayId);
+  }
+
+  public EventId hintSubTypeToEventId(@TalkBackHint int subType) {
+    return new EventId(getUptime(), EVENT_TYPE_TALKBACK_HINT, subType);
   }
 
   private void logGestureDetectionDuration(int gestureId) {
@@ -501,8 +567,9 @@ public class Performance {
    * Track event latency between receiving event, and the spoken feedback is composed.
    *
    * @param eventId Identity of an event handled by TalkBack
+   * @param firstSpokenText The text of the first fragment.
    */
-  public void onFeedbackComposed(@NonNull EventId eventId) {
+  public void onFeedbackComposed(@NonNull EventId eventId, CharSequence firstSpokenText) {
     if (!trackEvents()) {
       return;
     }
@@ -515,6 +582,7 @@ public class Performance {
 
     long now = getTime();
     eventData.setFeedbackComposed(now);
+    eventData.setFirstSpkenText(firstSpokenText);
     if (!computeStatsEnabled) {
       return;
     }
@@ -543,15 +611,11 @@ public class Performance {
    *
    * @param eventId Identity of an event handled by TalkBack
    * @param utteranceId Identity of a piece of spoken feedback, resulting from the event.
-   * @param flushTtsQueue Whether to flush the playback queue in TTS and interrupt current speaking
+   * @param utteranceInfo Whether to flush the playback queue in TTS and interrupt current speaking
    *     utterance.
-   * @param changeToSameLocale Whether to set TTS locale to the same one.
    */
   public void onFeedbackQueued(
-      @NonNull EventId eventId,
-      @NonNull String utteranceId,
-      boolean flushTtsQueue,
-      boolean changeToSameLocale) {
+      @NonNull EventId eventId, @NonNull String utteranceId, UtteranceInfoCombo utteranceInfo) {
     if (!trackEvents()) {
       return;
     }
@@ -568,7 +632,7 @@ public class Performance {
 
     // Compute stage latency.
     long now = getTime();
-    eventData.setFeedbackQueued(now, utteranceId, flushTtsQueue, changeToSameLocale);
+    eventData.setFeedbackQueued(now, utteranceId, utteranceInfo);
     indexRecentUtterance(utteranceId, eventId);
     if (!computeStatsEnabled) {
       return;
@@ -596,7 +660,7 @@ public class Performance {
    * Tracks event latency between receiving event, and hearing audio feedback. We also track the
    * latency between queueing first piece of spoken feedback and hearing audio feedback.
    */
-  public void onFeedbackOutput(@NonNull String utteranceId) {
+  public void onFeedbackOutput(@NonNull String utteranceId, boolean localCache) {
     if (!trackEvents()) {
       return;
     }
@@ -610,14 +674,14 @@ public class Performance {
     if (eventData == null) {
       return;
     }
+    if (clearRecentEventForInvalidData(eventId, utteranceId, eventData)) {
+      return;
+    }
 
-    // If speech is not already matched with this event...
-    // Somehow the utteranceId of eventData is null, so we check timeFeedbackQueued to avoid
-    // logging such metrics.
-    if (eventData.getTimeFeedbackOutput() <= 0 && eventData.getTimeFeedbackQueued() > 0) {
+    if (eventData.getTimeFeedbackOutput() <= 0) {
       // Compute stage latency.
       long now = getTime();
-      eventData.setFeedbackOutput(now);
+      eventData.setFeedbackOutput(now, localCache);
       notifyLatencyTracker(latencyTracker -> latencyTracker.onFeedbackOutput(eventData));
       if (computeStatsEnabled) {
         long stageLatency = now - eventData.timeReceivedAtTalkback;
@@ -654,9 +718,32 @@ public class Performance {
     }
 
     // Clear the recent event, since we have no more use for it after tracking all stages.
-    collectMissingLatencies(eventData);
+    if (eventData.getTimeFeedbackReady() < 0) {
+      LogUtils.w(TAG, "onFeedbackReady is not set, clear the event later ");
+      return;
+    }
+    if (!TRACKING_RANGE_START) {
+      // Range start is called after onFeedbackOutput, so we need to clear the event later.
+      clearEvent(eventId, utteranceId, eventData);
+    }
+  }
+
+  private boolean clearRecentEventForInvalidData(
+      EventId eventId, String utteranceId, EventData eventData) {
+    // If speech is not already matched with this event...
+    // Somehow the utteranceId of eventData is null, so we check timeFeedbackQueued to avoid
+    // logging such metrics.
+    if (eventData.getTimeFeedbackQueued() < 0) {
+      clearEvent(eventId, utteranceId, eventData);
+      return true;
+    }
+    return false;
+  }
+
+  private void clearEvent(EventId eventId, String utteranceId, EventData eventData) {
     removeRecentEvent(eventId);
     removeRecentUtterance(utteranceId);
+    collectMissingLatencies(eventData);
   }
 
   /**
@@ -666,7 +753,11 @@ public class Performance {
    * audio feedback.
    */
   public void onAccessibilityActionPerformed(
-      @NonNull EventId eventId, int actionId, long actionStartUpTime, boolean success) {
+      @NonNull EventId eventId,
+      int actionId,
+      long actionStartUpTime,
+      boolean success,
+      AccessibilityNode node) {
     if (!trackEvents()) {
       return;
     }
@@ -685,7 +776,15 @@ public class Performance {
     long now = getUptime();
 
     eventData.actionDetails =
-        new AccessibilityActionDetails(actionId, now - actionStartUpTime, now, success);
+        new AccessibilityActionDetails(
+            actionId,
+            now - actionStartUpTime,
+            now,
+            success,
+            node.isTextEntryKey(),
+            AccessibilityNodeInfoUtils.isKeyboard(node.getCompat()),
+            node.getCompat().hashCode(),
+            Role.getRole(node.getCompat()));
 
     notifyLatencyTracker(
         latencyTracker -> latencyTracker.onAccessibilityActionPerformed(eventData));
@@ -700,6 +799,66 @@ public class Performance {
         Statistics stats = getOrCreateStatistics(label, STAGE_ACTION_PERFORMED);
         stats.increment(stageLatency);
       }
+    }
+  }
+
+  public void onFeedbackRangeStarted(String utteranceId) {
+    if (!TRACKING_RANGE_START) {
+      return;
+    }
+    if (!trackEvents()) {
+      return;
+    }
+
+    // If recent event not found... then labels are not available to increment statistics.
+    EventId eventId = getRecentUtterance(utteranceId);
+    if (eventId == null) {
+      return;
+    }
+    EventData eventData = getRecentEvent(eventId);
+    if (eventData == null) {
+      return;
+    }
+
+    if (clearRecentEventForInvalidData(eventId, utteranceId, eventData)) {
+      return;
+    }
+    long now = getTime();
+    if (eventData.getFeedbackRangeStartLatencyMs() > 0 || eventData.getTimeFeedbackQueued() < 0) {
+      return;
+    }
+
+    eventData.setFeedbackRangeStartLatencyMs(now - eventData.getTimeFeedbackQueued());
+    notifyLatencyTracker(latencyTracker -> latencyTracker.onFeedbackRangeStart(eventData));
+    clearEvent(eventId, utteranceId, eventData);
+  }
+
+  public void onFeedbackReady(String utteranceId) {
+    if (!trackEvents()) {
+      return;
+    }
+
+    // If recent event not found... then labels are not available to increment statistics.
+    EventId eventId = getRecentUtterance(utteranceId);
+    if (eventId == null) {
+      return;
+    }
+    EventData eventData = getRecentEvent(eventId);
+    if (eventData == null) {
+      return;
+    }
+
+    if (clearRecentEventForInvalidData(eventId, utteranceId, eventData)) {
+      return;
+    }
+    long now = getTime();
+    eventData.setTimeFeedbackReady(now);
+    notifyLatencyTracker(latencyTracker -> latencyTracker.onFeedbackReady(eventData));
+
+    // Clear the recent event when all stages are completed. we need to ensure feedbackOutput is
+    // valid because Sometimes feedbackOutput is invoked before feedbackReady.
+    if (eventData.getTimeFeedbackOutput() > 0 && !TRACKING_RANGE_START) {
+      clearEvent(eventId, utteranceId, eventData);
     }
   }
 
@@ -1182,42 +1341,28 @@ public class Performance {
     }
 
     @Override
+    @SuppressLint("SwitchIntDef") // pre-existing logic
     public String toString() {
-      String subtypeString;
-      switch (eventType) {
-        case EVENT_TYPE_ACCESSIBILITY:
-          subtypeString = AccessibilityEventUtils.typeToString(eventSubtype);
-          break;
-        case EVENT_TYPE_KEY:
-          subtypeString = KeyEvent.keyCodeToString(eventSubtype);
-          break;
-        case EVENT_TYPE_GESTURE:
-          subtypeString = AccessibilityServiceCompatUtils.gestureIdToString(eventSubtype);
-          break;
-        case EVENT_TYPE_FINGERPRINT_GESTURE:
-          subtypeString =
-              AccessibilityServiceCompatUtils.fingerprintGestureIdToString(eventSubtype);
-          break;
-        case EVENT_TYPE_KEY_COMBO:
-          subtypeString =
-              String.format(Locale.getDefault(Category.FORMAT), "KEY_COMBO_%d", eventSubtype);
-          break;
-        case EVENT_TYPE_ROTATE:
-          subtypeString = orientationToSymbolicName(eventSubtype);
-          break;
-        case EVENT_TYPE_VOLUME_KEY_COMBO:
-          subtypeString =
-              String.format(
-                  Locale.getDefault(Category.FORMAT), "VOLUME_KEY_COMBO_%d", eventSubtype);
-          break;
-        case EVENT_TYPE_MOTION_EVENT_SOURCE:
-          subtypeString =
-              String.format(
-                  Locale.getDefault(Category.FORMAT), "MOTION_EVENT_SOURCE_%d", eventSubtype);
-          break;
-        default:
-          subtypeString = Integer.toString(eventSubtype);
-      }
+      String subtypeString =
+          switch (eventType) {
+            case EVENT_TYPE_ACCESSIBILITY -> AccessibilityEventUtils.typeToString(eventSubtype);
+            case EVENT_TYPE_KEY -> KeyEvent.keyCodeToString(eventSubtype);
+            case EVENT_TYPE_GESTURE ->
+                AccessibilityServiceCompatUtils.gestureIdToString(eventSubtype);
+            case EVENT_TYPE_FINGERPRINT_GESTURE ->
+                AccessibilityServiceCompatUtils.fingerprintGestureIdToString(eventSubtype);
+            case EVENT_TYPE_KEY_COMBO ->
+                String.format(Locale.getDefault(Category.FORMAT), "KEY_COMBO_%d", eventSubtype);
+            case EVENT_TYPE_ROTATE -> orientationToSymbolicName(eventSubtype);
+            case EVENT_TYPE_VOLUME_KEY_COMBO ->
+                String.format(
+                    Locale.getDefault(Category.FORMAT), "VOLUME_KEY_COMBO_%d", eventSubtype);
+            case EVENT_TYPE_MOTION_EVENT_SOURCE ->
+                String.format(
+                    Locale.getDefault(Category.FORMAT), "MOTION_EVENT_SOURCE_%d", eventSubtype);
+            case EVENT_TYPE_TALKBACK_HINT -> TALKBACK_HINT_SUB_TYPE_NAMES.get(eventSubtype);
+            default -> Integer.toString(eventSubtype);
+          };
       return "type:"
           + EVENT_TYPE_NAMES.get(eventType)
           + " subtype:"
@@ -1230,16 +1375,12 @@ public class Performance {
   }
 
   private static String orientationToSymbolicName(int orientation) {
-    switch (orientation) {
-      case ORIENTATION_UNDEFINED:
-        return "ORIENTATION_UNDEFINED";
-      case ORIENTATION_LANDSCAPE:
-        return "ORIENTATION_LANDSCAPE";
-      case ORIENTATION_PORTRAIT:
-        return "ORIENTATION_PORTRAIT";
-      default:
-        return "ORIENTATION_" + orientation;
-    }
+    return switch (orientation) {
+      case ORIENTATION_UNDEFINED -> "ORIENTATION_UNDEFINED";
+      case ORIENTATION_LANDSCAPE -> "ORIENTATION_LANDSCAPE";
+      case ORIENTATION_PORTRAIT -> "ORIENTATION_PORTRAIT";
+      default -> "ORIENTATION_" + orientation;
+    };
   }
 
   /**
@@ -1352,7 +1493,9 @@ public class Performance {
     GestureEventData gestureEventData = eventData.gestureEventData;
     gestureEventData.gestureId = gestureId;
     gestureEventData.gestureDetectedTime = getUptime();
-    if (gestureEventData.lastMotionEventTime != -1 && gestureEventData.gestureDecisionTime != -1) {
+    if ((gestureId == GESTURE_TOUCH_EXPLORE)
+        || (gestureEventData.lastMotionEventTime != -1
+            && gestureEventData.gestureDecisionTime != -1)) {
       notifyLatencyTracker(latencyTracker -> latencyTracker.onGestureRecognized(gestureEventData));
     }
     removeRecentEvent(eventId);
@@ -1361,6 +1504,43 @@ public class Performance {
   public void onGestureDetectionStopped(EventId eventId) {
     removeRecentEvent(eventId);
   }
+
+  /**
+   * Invoked when performing the corresponding action of the event. The action name is determined by
+   * the caller.
+   */
+  public void onPerformAction(EventId eventId, String action) {
+    @Nullable EventData eventData = getRecentEvent(eventId);
+    if (eventData == null) {
+      return;
+    }
+    if (!trackEvents()) {
+      return;
+    }
+    eventData.setAction(action);
+  }
+
+  /** The action of changing locale. */
+  @IntDef({
+    CHANGE_LOCALE_UNDEFINED,
+    CHANGE_LOCALE_NONE,
+    CHANGE_LOCALE_SAME,
+    CHANGE_LOCALE_DIFFERENT,
+    CHANGE_LOCALE_SAME_LANGUAGE,
+  })
+  public @interface ChangeLocaleAction {}
+
+  public static final int CHANGE_LOCALE_UNDEFINED = 0;
+  public static final int CHANGE_LOCALE_NONE = 1;
+
+  /** Changed locale is as same as the previous one */
+  public static final int CHANGE_LOCALE_SAME = 2;
+
+  /** Changed locale is different from the previous one */
+  public static final int CHANGE_LOCALE_DIFFERENT = 3;
+
+  /** Changed locale has same language with the previous one */
+  public static final int CHANGE_LOCALE_SAME_LANGUAGE = 4;
 
   /** Tracking the stage start times for an event. */
   public static final class EventData {
@@ -1381,14 +1561,21 @@ public class Performance {
 
     private @Nullable AccessibilityActionDetails actionDetails;
     private @Nullable GestureEventData gestureEventData;
+    private @Nullable AccessibilityAttributes accessibilityAttributes;
 
     // Members set when feedback is queued.
     private long timeFeedbackQueued = -1;
     private String utteranceId; // Updates may come from TalkBack or TextToSpeech threads.
-    private boolean flushTtsQueue;
+    private UtteranceInfoCombo utteranceInfo;
     private boolean changeToSameLocale;
-
+    private long timeFeedbackReady = -1;
+    // The latency from onFeedbackQueued to onRangeStart is called first.
+    private long feedbackRangeStartLatencyMs = -1;
     private long timeFeedbackOutput = -1;
+    private String action;
+    private CharSequence aggregatedText;
+
+    private boolean localCache = false;
 
     private EventData(
         long timeReceivedAtTalkback,
@@ -1408,19 +1595,31 @@ public class Performance {
 
     // Synchronized because this method may be called from a separate audio handling thread.
     synchronized void setFeedbackQueued(
-        long timeFeedbackQueued,
-        String utteranceId,
-        boolean flushTtsQueue,
-        boolean changeToSameLocale) {
+        long timeFeedbackQueued, String utteranceId, UtteranceInfoCombo utteranceInfo) {
       this.timeFeedbackQueued = timeFeedbackQueued;
       this.utteranceId = utteranceId;
-      this.flushTtsQueue = flushTtsQueue;
-      this.changeToSameLocale = changeToSameLocale;
+      this.utteranceInfo = utteranceInfo;
+      this.changeToSameLocale = utteranceInfo.changeLocaleAction() == CHANGE_LOCALE_SAME;
     }
 
     // Synchronized because this method may be called from a separate audio handling thread.
-    synchronized void setFeedbackOutput(long timeFeedbackOutput) {
+    synchronized void setFeedbackOutput(long timeFeedbackOutput, boolean localCache) {
       this.timeFeedbackOutput = timeFeedbackOutput;
+      this.localCache = localCache;
+    }
+
+    // Synchronized because this method may be called from a separate audio handling thread.
+    synchronized void setTimeFeedbackReady(long timeFeedbackReady) {
+      this.timeFeedbackReady = timeFeedbackReady;
+    }
+
+    // Synchronized because this method may be called from a separate audio handling thread.
+    synchronized void setFeedbackRangeStartLatencyMs(long feedbackRangeStartLatencyMs) {
+      this.feedbackRangeStartLatencyMs = feedbackRangeStartLatencyMs;
+    }
+
+    synchronized void setAction(String action) {
+      this.action = action;
     }
 
     public synchronized long getTimeFeedbackComposed() {
@@ -1439,8 +1638,8 @@ public class Performance {
       return timeFeedbackOutput;
     }
 
-    public synchronized boolean getFlushTtsQueue() {
-      return flushTtsQueue;
+    public synchronized UtteranceInfoCombo getUtteranceInfo() {
+      return utteranceInfo;
     }
 
     public synchronized boolean getChangeToSameLocale() {
@@ -1449,6 +1648,34 @@ public class Performance {
 
     public synchronized AccessibilityActionDetails getActionDetails() {
       return actionDetails;
+    }
+
+    public synchronized AccessibilityAttributes getAccessibilityAttributes() {
+      return accessibilityAttributes;
+    }
+
+    public synchronized @Nullable String getAction() {
+      return action;
+    }
+
+    public synchronized long getTimeFeedbackReady() {
+      return timeFeedbackReady;
+    }
+
+    public synchronized long getFeedbackRangeStartLatencyMs() {
+      return feedbackRangeStartLatencyMs;
+    }
+
+    public synchronized int getChangeLocaleAction() {
+      return utteranceInfo.changeLocaleAction();
+    }
+
+    public synchronized CharSequence getAggregatedText() {
+      return aggregatedText;
+    }
+
+    public synchronized boolean isLocalCache() {
+      return localCache;
     }
 
     @Override
@@ -1462,18 +1689,62 @@ public class Performance {
           + " timeReceivedAtTalkback="
           + timeReceivedAtTalkback
           + " mTimeFeedbackQueued="
-          + timeFeedbackComposed
-          + " timeFeedbackComposed="
           + timeFeedbackQueued
-          + " mTimeFeedbackOutput="
+          + " timeFeedbackComposed="
+          + timeFeedbackComposed
+          + " timeFeedbackReady="
+          + timeFeedbackReady
+          + " timeFeedbackOutput="
           + timeFeedbackOutput
+          + " feedbackRangeStartLatency="
+          + feedbackRangeStartLatencyMs
           + " timeInlineHandled="
           + timeInlineHandled
-          + " flushTtsQueue="
-          + flushTtsQueue
+          + " utteranceInfo="
+          + utteranceInfo
           + String.format(" mUtteranceId=%s", utteranceId)
           + " actionDetails="
-          + actionDetails;
+          + actionDetails
+          + " action="
+          + action
+          + " accessibilityEventAttributes="
+          + accessibilityAttributes
+          + " localCache="
+          + localCache;
+    }
+
+    private void recordAccessibilityEventAttributes(AccessibilityEvent event) {
+      int movementGranularity = 0;
+      int fromIndex = -1;
+      int toIndex = -1;
+      int itemCount = -1;
+      if ((event.getEventType() == TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY)) {
+        movementGranularity = event.getMovementGranularity();
+      } else if ((event.getEventType() == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED)) {
+        fromIndex = event.getFromIndex();
+        toIndex = event.getToIndex();
+        itemCount = event.getItemCount();
+      }
+
+      AccessibilityNodeInfo nodeInfo = event.getSource();
+      if (nodeInfo != null) {
+        AccessibilityNodeInfoCompat node = AccessibilityNodeInfoCompat.wrap(nodeInfo);
+        accessibilityAttributes =
+            new AccessibilityAttributes(
+                fromIndex,
+                toIndex,
+                itemCount,
+                movementGranularity,
+                node.isTextEntryKey(),
+                node.isFocused(),
+                AccessibilityNodeInfoUtils.isKeyboard(node),
+                node.isEditable(),
+                node.hashCode());
+      }
+    }
+
+    public synchronized void setFirstSpkenText(CharSequence aggregatedText) {
+      this.aggregatedText = aggregatedText;
     }
   }
 
@@ -1502,7 +1773,7 @@ public class Performance {
 
     @Override
     public int compareTo(Object otherObj) {
-      if (otherObj == null || !(otherObj instanceof StatisticsKey)) {
+      if (!(otherObj instanceof StatisticsKey)) {
         return 1;
       }
       if (this == otherObj) {

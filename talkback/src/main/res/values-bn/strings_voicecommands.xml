@@ -84,7 +84,7 @@
   <string name="voice_commands_slower">আরও ধীরে</string>
   <string name="voice_commands_decrease_speech_rate">স্পিচ রেট কমাও</string>
   <string name="voice_commands_no_action">ভয়েস শর্টকাট কাজ করে না</string>
-  <string name="voice_commands_no_mic_permissions">এই ফিচারটি ব্যবহার করার জন্য় মাইক্রোফোন ব্যবহারের অনুমতি দিতে হবে।</string>
+  <string name="voice_commands_no_mic_permissions">এই ফিচারটি ব্যবহার করার জন্য মাইক্রোফোন ব্যবহারের অনুমতি দিতে হবে।</string>
   <string name="voice_commands_no_voice_recognition_ability">এই ফিচারটি আপনার ডিভাইসে নেই</string>
   <string name="voice_commands_error">ভয়েস কমান্ড শনাক্ত করতে সমস্যা হয়েছে</string>
   <string name="voice_commands_partial_result">এই কমান্ড বোঝা যাচ্ছে না। কমান্ডের সব তালিকা পেতে \"%1$s\" বলে দেখুন।</string>

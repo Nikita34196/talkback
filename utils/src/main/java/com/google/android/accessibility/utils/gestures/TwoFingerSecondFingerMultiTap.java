@@ -72,8 +72,9 @@ public class TwoFingerSecondFingerMultiTap extends GestureMatcher {
       int taps,
       @RotateDirection int rotateDirection,
       int gestureId,
-      GestureMatcher.StateChangeListener listener) {
-    super(gestureId, new Handler(context.getMainLooper()), listener);
+      GestureMatcher.StateChangeListener listener,
+      GestureMatcher.AnalyticsEventLogger logger) {
+    super(gestureId, new Handler(context.getMainLooper()), listener, logger);
     this.rotateDirection = rotateDirection;
     targetTapCount = taps;
     targetFingerCount = 2;
@@ -226,23 +227,22 @@ public class TwoFingerSecondFingerMultiTap extends GestureMatcher {
       tappingIndex = event.getActionIndex();
       float deltaX = event.getX(tappingIndex) - bases[1 - tappingIndex].x;
       switch (rotateDirection) {
-        case ROTATE_DIRECTION_FORWARD:
+        case ROTATE_DIRECTION_FORWARD -> {
           if (deltaX <= 0) {
             gestureMotionEventLog(VERBOSE, "Rotating direction mismatches.");
             cancelGesture(event);
             return;
           }
-          break;
-        case ROTATE_DIRECTION_BACKWARD:
+        }
+        case ROTATE_DIRECTION_BACKWARD -> {
           if (deltaX >= 0) {
             gestureMotionEventLog(VERBOSE, "Rotating direction mismatches.");
             cancelGesture(event);
             return;
           }
-          break;
-        case ROTATE_DIRECTION_DONT_CARE:
-          break;
-        default: // fall out
+        }
+        case ROTATE_DIRECTION_DONT_CARE -> {}
+        default -> {}
       }
       if (completedTapCount == (targetTapCount - 1)) {
         startGesture(event);

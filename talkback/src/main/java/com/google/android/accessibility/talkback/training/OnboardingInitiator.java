@@ -40,8 +40,9 @@ public class OnboardingInitiator {
 
   static final int NEW_GESTURE_NOTIFICATION_ID = 1;
 
+  // LINT.IfChange(onboarding_update)
   @StringRes @VisibleForTesting
-  public static final int NEW_FEATURE_SHOWN_KEY = R.string.pref_update_welcome_15_0_shown_key;
+  public static final int NEW_FEATURE_SHOWN_KEY = R.string.pref_update_welcome_16_2_shown_key;
 
   /** A list of legacy preferences for old onboardings. */
   @VisibleForTesting
@@ -52,8 +53,17 @@ public class OnboardingInitiator {
     R.string.pref_update_welcome_13_1_shown_key,
     R.string.pref_update_welcome_14_0_shown_key,
     R.string.pref_update_welcome_14_1_shown_key,
-    R.string.pref_update_welcome_14_2_shown_key
+    R.string.pref_update_welcome_14_2_shown_key,
+    R.string.pref_update_welcome_15_0_shown_key,
+    R.string.pref_update_welcome_15_1_shown_key,
+    R.string.pref_update_welcome_15_2_shown_key,
+    R.string.pref_update_welcome_16_0_shown_key,
+    R.string.pref_update_welcome_16_1_shown_key,
   };
+
+  // LINT.ThenChange(
+  // //depot/google3/java/com/google/android/accessibility/talkback/res/values/donottranslate.xml:onboarding_update,
+  // //depot/google3/java/com/google/android/accessibility/talkback/overlay/handset/com/android/talkback/training/OnboardingConfigs.java:onboarding_update)
 
   /** Sets onboarding preferences to true to ignore onboarding. */
   public static void markAllOnboardingAsShown(Context context) {
@@ -77,11 +87,12 @@ public class OnboardingInitiator {
   /**
    * Shows onboarding if users update TalkBack, or shows a updated notification if users update to
    * Android R after having new TalkBack.
+   *
+   * @return {@code true} if the onboarding for new features is initiated
    */
-  public static void showOnboardingIfNecessary(Context context) {
-    FormFactorUtils formFactorUtils = FormFactorUtils.getInstance();
-    if (formFactorUtils.isAndroidTv() || formFactorUtils.isAndroidWear()) {
-      return;
+  public static boolean showOnboardingIfNecessary(Context context) {
+    if (FormFactorUtils.isAndroidTv() || FormFactorUtils.isAndroidWear()) {
+      return false;
     }
 
     SharedPreferences prefs = SharedPreferencesUtils.getSharedPreferences(context);
@@ -117,7 +128,9 @@ public class OnboardingInitiator {
       }
       context.startActivity(createOnboardingIntent(context, /* showExitBanner= */ true));
       markOnboardingForNewFeaturesAsShown(prefs, context);
+      return true;
     }
+    return false;
   }
 
   private static boolean hasOnboardingForMultiFingerGestureSupportBeenShown(
