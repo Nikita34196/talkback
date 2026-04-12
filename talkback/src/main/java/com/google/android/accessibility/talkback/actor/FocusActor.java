@@ -147,17 +147,12 @@ public class FocusActor implements UserInputEventListener {
 
     // Max messenger: skip nodeAction (returns true but does nothing for ImageViews).
     // Go straight to TouchInteractionController.performClick() which sends a real
-    // click at the touch exploration position — this is what makes clicks work.
+    // click at the touch exploration position.
+    // IMPORTANT: check ONLY node package, NOT AppCompatState (it can be stale).
     CharSequence pkg = node.getPackageName();
     boolean isMaxNode = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
-    if (!isMaxNode) {
-      try {
-        isMaxNode = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
-      } catch (Exception ignored) {}
-    }
 
     if (isMaxNode) {
-      // Use the native touch interaction click — same mechanism as standard TalkBack
       if (gestureDetectionState.gestureDetector()) {
         TouchInteractionController controller =
             service.getTouchInteractionController(
@@ -167,7 +162,6 @@ public class FocusActor implements UserInputEventListener {
           return true;
         }
       }
-      // Fallback for Max if controller unavailable
       return simulateClickOnNode(service, node);
     }
 

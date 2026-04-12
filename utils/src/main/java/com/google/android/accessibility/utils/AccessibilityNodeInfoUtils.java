@@ -3493,19 +3493,9 @@ public class AccessibilityNodeInfoUtils {
    * because individual nodes may not have packageName set.
    */
   private static boolean isMaxMessengerInteractiveNode(AccessibilityNodeInfoCompat node) {
-    // Check 1: global flag (set by GestureController on any gesture in Max)
-    boolean maxActive = AppCompatState.isMaxMessengerActive();
-
-    // Check 2: direct package check on node (fallback if flag not yet set)
-    if (!maxActive) {
-      CharSequence pkg = node.getPackageName();
-      if (pkg != null && "ru.oneme.app".equals(pkg.toString())) {
-        maxActive = true;
-        AppCompatState.setMaxMessengerActive(true);
-      }
-    }
-
-    if (!maxActive) {
+    // MUST verify this node actually belongs to Max messenger.
+    // AppCompatState can be stale when switching between apps.
+    if (!isNodeFromMax(node)) {
       return false;
     }
 
@@ -3518,5 +3508,26 @@ public class AccessibilityNodeInfoUtils {
         || className.contains("Button")
         || className.contains("ImageView")
         || className.contains("ImageButton");
+  }
+
+  /** Checks if a node belongs to Max by checking the node itself and its parents. */
+  private static boolean isNodeFromMax(AccessibilityNodeInfoCompat node) {
+    // Check node itself
+    CharSequence pkg = node.getPackageName();
+    if (pkg != null && "ru.oneme.app".equals(pkg.toString())) {
+      return true;
+    }
+    // Check parents (some Max nodes don't have packageName set)
+    AccessibilityNodeInfoCompat current = node;
+    for (int i = 0; i < 10; i++) {
+      AccessibilityNodeInfoCompat parent = current.getParent();
+      if (parent == null) break;
+      pkg = parent.getPackageName();
+      if (pkg != null) {
+        return "ru.oneme.app".equals(pkg.toString());
+      }
+      current = parent;
+    }
+    return false;
   }
 }
