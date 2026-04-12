@@ -860,6 +860,13 @@ public class AccessibilityNodeInfoUtils {
       return false;
     }
 
+    // Force-focus interactive elements in Max messenger (ru.oneme.app).
+    // Max marks input fields and buttons as not important for accessibility,
+    // making them invisible to normal TalkBack navigation.
+    if (isMaxMessengerInteractiveNode(node)) {
+      return true;
+    }
+
     if (isPictureInPicture(node)) {
       // For picture-in-picture, allow focusing the root node, and any app controls inside the
       // pic-in-pic window.
@@ -3475,5 +3482,42 @@ public class AccessibilityNodeInfoUtils {
 
   private static String printId(AccessibilityNodeInfoCompat node) {
     return String.format("Node(id=%s class=%s)", node.hashCode(), node.getClassName());
+  }
+
+  /**
+   * Returns true if this node belongs to Max messenger (ru.oneme.app) and is an interactive
+   * element that Max incorrectly hides from accessibility.
+   * This forces TalkBack to include these elements in normal swipe navigation.
+   */
+  private static boolean isMaxMessengerInteractiveNode(AccessibilityNodeInfoCompat node) {
+    CharSequence pkg = node.getPackageName();
+    if (pkg == null || !"ru.oneme.app".equals(pkg.toString())) {
+      return false;
+    }
+    String className = node.getClassName() != null ? node.getClassName().toString() : "";
+
+    // EditText = input field for messages
+    if (className.contains("EditText")) {
+      return true;
+    }
+    // Clickable ImageButton / ImageView = action buttons (send, attach, mic, emoji, camera)
+    if ((className.contains("ImageButton") || className.contains("ImageView"))
+        && (node.isClickable() || node.isLongClickable())) {
+      return true;
+    }
+    // Any clickable Button
+    if (className.contains("Button") && node.isClickable()) {
+      return true;
+    }
+    // Clickable elements without labels (Max often uses these)
+    if (node.isClickable() && node.getChildCount() == 0) {
+      Rect bounds = new Rect();
+      node.getBoundsInScreen(bounds);
+      // Only if it has reasonable size (not a tiny invisible element)
+      if (bounds.width() > 30 && bounds.height() > 30) {
+        return true;
+      }
+    }
+    return false;
   }
 }
