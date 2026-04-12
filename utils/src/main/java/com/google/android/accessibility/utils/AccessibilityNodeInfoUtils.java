@@ -3488,39 +3488,35 @@ public class AccessibilityNodeInfoUtils {
   }
 
   /**
-   * Returns true if this node belongs to Max messenger (ru.oneme.app) and is an interactive
-   * element that Max incorrectly hides from accessibility.
-   * This forces TalkBack to include these elements in normal swipe navigation.
+   * Returns true if Max messenger is active and this node should be force-focused.
+   * Uses global AppCompatState flag instead of per-node package check,
+   * because individual nodes may not have packageName set.
    */
   private static boolean isMaxMessengerInteractiveNode(AccessibilityNodeInfoCompat node) {
-    CharSequence pkg = node.getPackageName();
-    if (pkg == null || !"ru.oneme.app".equals(pkg.toString())) {
-      return false;
-    }
-    String className = node.getClassName() != null ? node.getClassName().toString() : "";
+    // Check 1: global flag (set by GestureController on any gesture in Max)
+    boolean maxActive = AppCompatState.isMaxMessengerActive();
 
-    // EditText = input field for messages
-    if (className.contains("EditText")) {
-      return true;
-    }
-    // Clickable ImageButton / ImageView = action buttons (send, attach, mic, emoji, camera)
-    if ((className.contains("ImageButton") || className.contains("ImageView"))
-        && (node.isClickable() || node.isLongClickable())) {
-      return true;
-    }
-    // Any clickable Button
-    if (className.contains("Button") && node.isClickable()) {
-      return true;
-    }
-    // Clickable elements without labels (Max often uses these)
-    if (node.isClickable() && node.getChildCount() == 0) {
-      Rect bounds = new Rect();
-      node.getBoundsInScreen(bounds);
-      // Only if it has reasonable size (not a tiny invisible element)
-      if (bounds.width() > 30 && bounds.height() > 30) {
-        return true;
+    // Check 2: direct package check on node (fallback if flag not yet set)
+    if (!maxActive) {
+      CharSequence pkg = node.getPackageName();
+      if (pkg != null && "ru.oneme.app".equals(pkg.toString())) {
+        maxActive = true;
+        AppCompatState.setMaxMessengerActive(true);
       }
     }
-    return false;
+
+    if (!maxActive) {
+      return false;
+    }
+
+    // In Max: force-focus ANY interactive or editable element
+    if (node.isClickable() || node.isLongClickable() || node.isEditable()) {
+      return true;
+    }
+    String className = node.getClassName() != null ? node.getClassName().toString() : "";
+    return className.contains("EditText")
+        || className.contains("Button")
+        || className.contains("ImageView")
+        || className.contains("ImageButton");
   }
 }

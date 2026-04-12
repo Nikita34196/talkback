@@ -102,6 +102,7 @@ import com.google.android.accessibility.talkback.focusmanagement.interpreter.Scr
 import com.google.android.accessibility.talkback.gesture.GestureShortcutMapping.TalkbackAction;
 import com.google.android.accessibility.talkback.gesture.PerAppGestureManager;
 import com.google.android.accessibility.talkback.appcompat.MaxAccessibilityFixer;
+import com.google.android.accessibility.utils.AppCompatState;
 import com.google.android.accessibility.talkback.interpreters.AccessibilityFocusInterpreter;
 import com.google.android.accessibility.talkback.menurules.RuleTextFormatting;
 import com.google.android.accessibility.talkback.monitor.BatteryMonitor;
@@ -732,6 +733,9 @@ public class GestureController {
       // Max messenger: check ALL windows (keyboard may be on top)
       boolean isMax = MaxAccessibilityFixer.PACKAGE_NAME.equals(currentPkg)
           || maxFixer.isMaxInForeground();
+
+      // Set global flag so shouldFocusNode in utils module knows Max is active
+      AppCompatState.setMaxMessengerActive(isMax);
 
       if (isMax) {
           // === MAX HIDDEN NAV MODE ===
