@@ -739,7 +739,7 @@ public class GestureController {
           if (gestureId == AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP) {
             maxHiddenNavMode = !maxHiddenNavMode;
             if (maxHiddenNavMode) {
-              maxFixer.invalidateCache();
+              maxFixer.resetNavigation();
               String summary = maxFixer.getHiddenElementsSummary();
               pipeline.returnFeedback(eventId,
                   Feedback.speech("Режим скрытых элементов включён. " + summary));

@@ -37,7 +37,7 @@ public class MaxAccessibilityFixer {
   private final List<NodeInfo> hiddenNodes = new ArrayList<>();
   private int currentHiddenIndex = -1;
   private long lastScanTime = 0;
-  private static final long SCAN_CACHE_MS = 1200;
+  private static final long SCAN_CACHE_MS = 10000; // 10 seconds cache while navigating
 
   public static class NodeInfo {
     public final AccessibilityNodeInfo node;
@@ -282,6 +282,8 @@ public class MaxAccessibilityFixer {
   public String navigateNextHidden() {
     List<NodeInfo> nodes = scanForHiddenElements();
     if (nodes.isEmpty()) return "Скрытых элементов не найдено";
+    // Clamp index if list changed size
+    if (currentHiddenIndex >= nodes.size()) currentHiddenIndex = -1;
     currentHiddenIndex = (currentHiddenIndex + 1) % nodes.size();
     return announceAndFocus();
   }
@@ -290,12 +292,16 @@ public class MaxAccessibilityFixer {
   public String navigatePreviousHidden() {
     List<NodeInfo> nodes = scanForHiddenElements();
     if (nodes.isEmpty()) return "Скрытых элементов не найдено";
+    if (currentHiddenIndex >= nodes.size()) currentHiddenIndex = nodes.size();
     currentHiddenIndex--;
     if (currentHiddenIndex < 0) currentHiddenIndex = nodes.size() - 1;
     return announceAndFocus();
   }
 
   private String announceAndFocus() {
+    if (currentHiddenIndex < 0 || currentHiddenIndex >= hiddenNodes.size()) {
+      return "Ошибка навигации";
+    }
     NodeInfo info = hiddenNodes.get(currentHiddenIndex);
     info.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
     return (currentHiddenIndex + 1) + " из " + hiddenNodes.size() + ": " + info.label;
@@ -475,6 +481,12 @@ public class MaxAccessibilityFixer {
       try { info.node.recycle(); } catch (Exception ignored) {}
     }
     hiddenNodes.clear();
+    // Do NOT reset currentHiddenIndex here — preserves position during rescan
+  }
+
+  /** Full reset: clears cache AND resets navigation position. */
+  public void resetNavigation() {
+    clearCache();
     currentHiddenIndex = -1;
   }
 }
