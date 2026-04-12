@@ -33,7 +33,12 @@ jobs:
           echo "/opt/gradle/gradle-8.13/bin" >> $GITHUB_PATH
 
       - name: Build Debug APK
-        run: gradle assemblePhoneDebug --no-daemon --stacktrace
+        run: |
+          gradle assemblePhoneDebug --no-daemon --stacktrace \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/debug.keystore \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=androiddebugkey \
+            -Pandroid.injected.signing.key.password=android
 
       - name: Find APK
         run: find . -name "*.apk"
@@ -52,10 +57,7 @@ jobs:
           name: ScreenReader TB ${{ github.ref_name }}
           body: |
             ## ScreenReader TB ${{ github.ref_name }}
-            Модифицированный TalkBack:
-            - Anthropic AI для распознавания иконок
-            - Улучшенная поддержка мессенджера Max
-            - Настраиваемые жесты для приложений
+            Модифицированный TalkBack
           files: "**/*.apk"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

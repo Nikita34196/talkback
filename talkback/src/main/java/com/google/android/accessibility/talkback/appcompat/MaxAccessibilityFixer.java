@@ -12,10 +12,10 @@ import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.os.Build;
-import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import java.util.ArrayList;
@@ -25,8 +25,8 @@ import java.util.Set;
 
 /**
  * Fixes accessibility issues in Max messenger (ru.oneme.app).
- * Deep-scans the node tree, finds hidden elements, provides navigation
- * and interaction via coordinate-based clicking.
+ * Finds hidden elements RELATIVE to the input field, not by absolute coordinates.
+ * Works correctly even when keyboard is open.
  */
 public class MaxAccessibilityFixer {
 
@@ -37,7 +37,7 @@ public class MaxAccessibilityFixer {
   private final List<NodeInfo> hiddenNodes = new ArrayList<>();
   private int currentHiddenIndex = -1;
   private long lastScanTime = 0;
-  private static final long SCAN_CACHE_MS = 1500;
+  private static final long SCAN_CACHE_MS = 1200;
 
   public static class NodeInfo {
     public final AccessibilityNodeInfo node;
@@ -51,27 +51,48 @@ public class MaxAccessibilityFixer {
       this.label = label;
       this.bounds = bounds;
     }
-
-    /** Key for deduplication: bounds rectangle as string. */
-    public String boundsKey() {
-      return bounds.left + "," + bounds.top + "," + bounds.right + "," + bounds.bottom;
-    }
   }
 
   public MaxAccessibilityFixer(@NonNull AccessibilityService service) {
     this.service = service;
   }
 
+  /**
+   * Checks if Max is in foreground by scanning ALL windows.
+   * This works even when keyboard is on top.
+   */
   public boolean isMaxInForeground() {
-    AccessibilityNodeInfo root = service.getRootInActiveWindow();
-    if (root == null) return false;
-    boolean isMax = PACKAGE_NAME.equals(
-        root.getPackageName() != null ? root.getPackageName().toString() : "");
-    root.recycle();
-    return isMax;
+    for (AccessibilityWindowInfo window : service.getWindows()) {
+      AccessibilityNodeInfo root = window.getRoot();
+      if (root != null) {
+        CharSequence pkg = root.getPackageName();
+        root.recycle();
+        if (PACKAGE_NAME.equals(pkg != null ? pkg.toString() : "")) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
-  /** Force rescan on next call. */
+  /**
+   * Gets the root of the Max app window (not keyboard).
+   */
+  @Nullable
+  private AccessibilityNodeInfo getMaxRoot() {
+    for (AccessibilityWindowInfo window : service.getWindows()) {
+      AccessibilityNodeInfo root = window.getRoot();
+      if (root != null) {
+        CharSequence pkg = root.getPackageName();
+        if (PACKAGE_NAME.equals(pkg != null ? pkg.toString() : "")) {
+          return root;
+        }
+        root.recycle();
+      }
+    }
+    return null;
+  }
+
   public void invalidateCache() {
     lastScanTime = 0;
   }
@@ -83,43 +104,48 @@ public class MaxAccessibilityFixer {
       return hiddenNodes;
     }
     clearCache();
-    AccessibilityNodeInfo root = service.getRootInActiveWindow();
+
+    AccessibilityNodeInfo root = getMaxRoot();
     if (root == null) return hiddenNodes;
-    if (!PACKAGE_NAME.equals(
-        root.getPackageName() != null ? root.getPackageName().toString() : "")) {
-      root.recycle();
-      return hiddenNodes;
+
+    // Step 1: Find the EditText (input field) — our anchor point
+    Rect editTextBounds = new Rect();
+    AccessibilityNodeInfo editText = findFirst(root, "EditText", 0);
+    if (editText != null) {
+      editText.getBoundsInScreen(editTextBounds);
     }
 
+    // Step 2: Deep scan for all hidden interactive elements
     List<NodeInfo> raw = new ArrayList<>();
-    deepScan(root, 0, raw);
+    deepScan(root, 0, raw, editTextBounds);
     root.recycle();
 
-    // Deduplicate: if two nodes have overlapping bounds, keep the more specific one (smaller)
+    // Step 3: Deduplicate overlapping nodes
     deduplicateNodes(raw);
 
-    // Sort by position: top to bottom, left to right
+    // Step 4: Sort — elements near EditText first, then left to right
     hiddenNodes.sort((a, b) -> {
-      if (Math.abs(a.bounds.top - b.bounds.top) > 30) {
-        return Integer.compare(a.bounds.top, b.bounds.top);
+      // Same row (within 30px of each other vertically)
+      if (Math.abs(a.bounds.centerY() - b.bounds.centerY()) < 30) {
+        return Integer.compare(a.bounds.left, b.bounds.left);
       }
-      return Integer.compare(a.bounds.left, b.bounds.left);
+      return Integer.compare(a.bounds.top, b.bounds.top);
     });
 
     lastScanTime = now;
-    Log.d(TAG, "Found " + hiddenNodes.size() + " unique hidden elements in Max");
+    Log.d(TAG, "Found " + hiddenNodes.size() + " hidden elements:");
     for (int i = 0; i < hiddenNodes.size(); i++) {
       NodeInfo n = hiddenNodes.get(i);
-      Log.d(TAG, "  " + (i+1) + ": " + n.label + " at " + n.bounds + " [" + n.className + "]");
+      Log.d(TAG, "  " + (i+1) + ": " + n.label + " " + n.bounds);
     }
     return hiddenNodes;
   }
 
-  private void deepScan(AccessibilityNodeInfo node, int depth, List<NodeInfo> results) {
+  private void deepScan(AccessibilityNodeInfo node, int depth,
+      List<NodeInfo> results, Rect editTextBounds) {
     if (node == null || depth > 30) return;
     if (isInteractiveElement(node) && node.isVisibleToUser()) {
       String className = node.getClassName() != null ? node.getClassName().toString() : "";
-      // Check if TalkBack would normally skip this element
       boolean hasGoodLabel = !TextUtils.isEmpty(node.getContentDescription())
           || !TextUtils.isEmpty(node.getText());
       boolean isScreenReaderVisible = node.isScreenReaderFocusable()
@@ -132,59 +158,14 @@ public class MaxAccessibilityFixer {
         if (bounds.width() > 20 && bounds.height() > 20) {
           results.add(new NodeInfo(
               AccessibilityNodeInfo.obtain(node), className,
-              guessLabel(node, className, bounds), bounds));
+              guessLabelRelative(node, className, bounds, editTextBounds), bounds));
         }
       }
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       AccessibilityNodeInfo child = node.getChild(i);
-      if (child != null) {
-        deepScan(child, depth + 1, results);
-      }
+      if (child != null) deepScan(child, depth + 1, results, editTextBounds);
     }
-  }
-
-  /**
-   * Removes duplicate/overlapping nodes. If two nodes overlap by >70%,
-   * keep the smaller (more specific) one.
-   */
-  private void deduplicateNodes(List<NodeInfo> raw) {
-    Set<Integer> removed = new HashSet<>();
-    for (int i = 0; i < raw.size(); i++) {
-      if (removed.contains(i)) continue;
-      for (int j = i + 1; j < raw.size(); j++) {
-        if (removed.contains(j)) continue;
-        Rect a = raw.get(i).bounds;
-        Rect b = raw.get(j).bounds;
-        if (overlapsSignificantly(a, b)) {
-          // Keep the smaller one (more specific)
-          int areaA = a.width() * a.height();
-          int areaB = b.width() * b.height();
-          if (areaA <= areaB) {
-            removed.add(j);
-          } else {
-            removed.add(i);
-            break;
-          }
-        }
-      }
-    }
-    for (int i = 0; i < raw.size(); i++) {
-      if (!removed.contains(i)) {
-        hiddenNodes.add(raw.get(i));
-      }
-    }
-  }
-
-  private boolean overlapsSignificantly(Rect a, Rect b) {
-    int overlapLeft = Math.max(a.left, b.left);
-    int overlapTop = Math.max(a.top, b.top);
-    int overlapRight = Math.min(a.right, b.right);
-    int overlapBottom = Math.min(a.bottom, b.bottom);
-    if (overlapLeft >= overlapRight || overlapTop >= overlapBottom) return false;
-    int overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
-    int smallerArea = Math.min(a.width() * a.height(), b.width() * b.height());
-    return smallerArea > 0 && (float) overlapArea / smallerArea > 0.7f;
   }
 
   private boolean isInteractiveElement(AccessibilityNodeInfo node) {
@@ -193,12 +174,44 @@ public class MaxAccessibilityFixer {
     return cn.contains("EditText") || cn.contains("ImageButton");
   }
 
+  private void deduplicateNodes(List<NodeInfo> raw) {
+    Set<Integer> removed = new HashSet<>();
+    for (int i = 0; i < raw.size(); i++) {
+      if (removed.contains(i)) continue;
+      for (int j = i + 1; j < raw.size(); j++) {
+        if (removed.contains(j)) continue;
+        if (overlaps(raw.get(i).bounds, raw.get(j).bounds)) {
+          int areaA = raw.get(i).bounds.width() * raw.get(i).bounds.height();
+          int areaB = raw.get(j).bounds.width() * raw.get(j).bounds.height();
+          removed.add(areaA <= areaB ? j : i);
+          if (areaA > areaB) break;
+        }
+      }
+    }
+    for (int i = 0; i < raw.size(); i++) {
+      if (!removed.contains(i)) hiddenNodes.add(raw.get(i));
+    }
+  }
+
+  private boolean overlaps(Rect a, Rect b) {
+    int oL = Math.max(a.left, b.left);
+    int oT = Math.max(a.top, b.top);
+    int oR = Math.min(a.right, b.right);
+    int oB = Math.min(a.bottom, b.bottom);
+    if (oL >= oR || oT >= oB) return false;
+    int oa = (oR - oL) * (oB - oT);
+    int sa = Math.min(a.width() * a.height(), b.width() * b.height());
+    return sa > 0 && (float) oa / sa > 0.65f;
+  }
+
   // =========================================================================
-  // Label guessing
+  // Label guessing — RELATIVE to EditText position
   // =========================================================================
 
   @NonNull
-  private String guessLabel(AccessibilityNodeInfo node, String className, Rect bounds) {
+  private String guessLabelRelative(AccessibilityNodeInfo node, String className,
+      Rect bounds, Rect editTextBounds) {
+    // Try actual labels first
     CharSequence desc = node.getContentDescription();
     if (!TextUtils.isEmpty(desc)) return desc.toString();
     CharSequence hint = node.getHintText();
@@ -206,6 +219,7 @@ public class MaxAccessibilityFixer {
     CharSequence text = node.getText();
     if (!TextUtils.isEmpty(text)) return text.toString();
 
+    // Try view ID
     String viewId = node.getViewIdResourceName();
     if (!TextUtils.isEmpty(viewId)) {
       String id = viewId.toLowerCase();
@@ -225,21 +239,26 @@ public class MaxAccessibilityFixer {
 
     if (className.contains("EditText")) return "Поле ввода сообщения";
 
-    // Guess by screen position using the screenshot layout:
-    // Bottom bar: [emoji] [input field] [attach] [camera] [mic/send]
-    Rect screen = getScreenBounds();
-    int sh = screen.height();
-    int sw = screen.width();
+    // Guess by position RELATIVE to EditText (works with keyboard open)
+    if (editTextBounds != null && editTextBounds.height() > 0) {
+      int editY = editTextBounds.centerY();
+      boolean sameRow = Math.abs(bounds.centerY() - editY) < 60;
 
-    if (bounds.top > sh * 0.88) {
-      if (className.contains("ImageButton") || className.contains("ImageView")
-          || node.isClickable()) {
-        float relX = (float) bounds.centerX() / sw;
-        if (relX < 0.12) return "Эмодзи";
-        if (relX > 0.88) return "Голосовое сообщение";
-        if (relX > 0.75) return "Камера";
-        if (relX > 0.60) return "Прикрепить файл";
-        return "Кнопка ввода";
+      if (sameRow && (className.contains("Image") || node.isClickable())) {
+        // Same row as input field:
+        // Layout: [emoji] [EditText] [attach] [camera] [mic/send]
+        if (bounds.right <= editTextBounds.left) {
+          return "Эмодзи";
+        }
+        if (bounds.left >= editTextBounds.right) {
+          // Count how many buttons are to the right
+          // The rightmost = mic/send, then camera, then attach
+          // Use relative position
+          int distFromRight = getScreenWidth() - bounds.centerX();
+          if (distFromRight < getScreenWidth() * 0.1) return "Голосовое сообщение";
+          if (distFromRight < getScreenWidth() * 0.2) return "Камера";
+          return "Прикрепить файл";
+        }
       }
     }
 
@@ -248,15 +267,11 @@ public class MaxAccessibilityFixer {
     return "Элемент";
   }
 
-  private Rect getScreenBounds() {
+  private int getScreenWidth() {
     Rect screen = new Rect();
-    AccessibilityNodeInfo root = service.getRootInActiveWindow();
-    if (root != null) {
-      root.getBoundsInScreen(screen);
-      root.recycle();
-    }
-    if (screen.width() <= 0) screen.set(0, 0, 1080, 2340);
-    return screen;
+    AccessibilityNodeInfo root = getMaxRoot();
+    if (root != null) { root.getBoundsInScreen(screen); root.recycle(); }
+    return screen.width() > 0 ? screen.width() : 1080;
   }
 
   // =========================================================================
@@ -282,7 +297,6 @@ public class MaxAccessibilityFixer {
 
   private String announceAndFocus() {
     NodeInfo info = hiddenNodes.get(currentHiddenIndex);
-    // Try multiple ways to focus the element
     info.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
     return (currentHiddenIndex + 1) + " из " + hiddenNodes.size() + ": " + info.label;
   }
@@ -294,93 +308,113 @@ public class MaxAccessibilityFixer {
   @Nullable
   public String clickCurrentHidden() {
     if (currentHiddenIndex < 0 || currentHiddenIndex >= hiddenNodes.size()) {
-      return "Сначала выберите элемент свайпом";
+      return "Сначала выберите элемент свайпом 3 пальца";
     }
     NodeInfo info = hiddenNodes.get(currentHiddenIndex);
     boolean clicked = info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     if (!clicked) clicked = tapAtCenter(info.bounds);
-    // Invalidate cache since UI may have changed
     invalidateCache();
-    return clicked ? info.label + ", нажато" : "Не удалось нажать " + info.label;
+    return clicked ? info.label + ", нажато" : "Не удалось нажать";
   }
 
   @Nullable
   public String focusInputField() {
-    // Always rescan when looking for input
     invalidateCache();
     List<NodeInfo> nodes = scanForHiddenElements();
     for (int i = 0; i < nodes.size(); i++) {
       if (nodes.get(i).className.contains("EditText")) {
         currentHiddenIndex = i;
         NodeInfo info = nodes.get(i);
+        // Try clicking the node directly
         boolean ok = info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         if (!ok) ok = info.node.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
         if (!ok) tapAtCenter(info.bounds);
         return info.label;
       }
     }
-    return findAndFocusAnyEditText();
+    // Deep fallback
+    AccessibilityNodeInfo root = getMaxRoot();
+    if (root != null) {
+      AccessibilityNodeInfo et = findFirst(root, "EditText", 0);
+      if (et != null) {
+        et.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        Rect b = new Rect(); et.getBoundsInScreen(b);
+        tapAtCenter(b);
+        root.recycle();
+        return "Поле ввода сообщения";
+      }
+      root.recycle();
+    }
+    return null;
   }
 
   @Nullable
   public String clickSendButton() {
-    // ALWAYS rescan because after typing text, mic changes to send
+    // MUST rescan because UI changed after typing
     invalidateCache();
-    // Small delay to let UI update
-    try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+    try { Thread.sleep(300); } catch (InterruptedException ignored) {}
     invalidateCache();
+
+    // Find EditText to get its row
+    AccessibilityNodeInfo root = getMaxRoot();
+    if (root == null) return "Max не найден";
+
+    AccessibilityNodeInfo editText = findFirst(root, "EditText", 0);
+    Rect editBounds = new Rect();
+    if (editText != null) {
+      editText.getBoundsInScreen(editBounds);
+    }
+
+    // Rescan
     List<NodeInfo> nodes = scanForHiddenElements();
 
-    // Pass 1: explicit send in ID
+    // Strategy 1: find button with "send" in ID
     for (int i = 0; i < nodes.size(); i++) {
-      NodeInfo info = nodes.get(i);
-      String id = info.node.getViewIdResourceName();
+      String id = nodes.get(i).node.getViewIdResourceName();
       if (id != null && id.toLowerCase().contains("send")) {
-        currentHiddenIndex = i;
-        return clickNode(info, "Сообщение отправлено");
+        root.recycle();
+        return clickNode(nodes.get(i));
       }
     }
 
-    // Pass 2: the rightmost button in the bottom bar
-    // From the screenshot: [emoji] [input] [attach] [camera] [mic/send]
-    // After typing, the rightmost becomes "send"
-    Rect screen = getScreenBounds();
-    int sh = screen.height();
-    int sw = screen.width();
-
-    NodeInfo rightmostBottom = null;
-    int rightmostIdx = -1;
-    int maxCenterX = 0;
-    for (int i = 0; i < nodes.size(); i++) {
-      NodeInfo info = nodes.get(i);
-      // Skip the text field
-      if (info.className.contains("EditText")) continue;
-      // Must be in bottom 15% of screen
-      if (info.bounds.top > sh * 0.85 && info.bounds.centerX() > maxCenterX) {
-        maxCenterX = info.bounds.centerX();
-        rightmostBottom = info;
-        rightmostIdx = i;
+    // Strategy 2: rightmost clickable element in the SAME ROW as EditText
+    if (editBounds.height() > 0) {
+      NodeInfo rightmost = null;
+      int maxX = 0;
+      for (NodeInfo info : nodes) {
+        if (info.className.contains("EditText")) continue;
+        boolean sameRow = Math.abs(info.bounds.centerY() - editBounds.centerY()) < 60;
+        if (sameRow && info.bounds.centerX() > maxX) {
+          maxX = info.bounds.centerX();
+          rightmost = info;
+        }
+      }
+      if (rightmost != null) {
+        root.recycle();
+        return clickNode(rightmost);
       }
     }
-    if (rightmostBottom != null) {
-      currentHiddenIndex = rightmostIdx;
-      return clickNode(rightmostBottom, "Сообщение отправлено");
+
+    // Strategy 3: tap just to the right of EditText
+    if (editBounds.height() > 0) {
+      int tapX = editBounds.right + 100;
+      int tapY = editBounds.centerY();
+      root.recycle();
+      Rect target = new Rect(tapX - 20, tapY - 20, tapX + 20, tapY + 20);
+      boolean ok = tapAtCenter(target);
+      return ok ? "Попытка отправить" : "Кнопка не найдена";
     }
 
-    // Pass 3: brute force — try tapping the bottom-right corner area
-    int tapX = (int)(sw * 0.93);
-    int tapY = (int)(sh * 0.95);
-    Rect fakeBounds = new Rect(tapX - 20, tapY - 20, tapX + 20, tapY + 20);
-    boolean tapped = tapAtCenter(fakeBounds);
-    return tapped ? "Попытка отправить по координатам" : "Кнопка отправки не найдена";
+    root.recycle();
+    return "Кнопка отправки не найдена";
   }
 
   @NonNull
-  private String clickNode(NodeInfo info, String successMsg) {
+  private String clickNode(NodeInfo info) {
     boolean clicked = info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     if (!clicked) clicked = tapAtCenter(info.bounds);
     invalidateCache();
-    return clicked ? successMsg : "Не удалось нажать";
+    return clicked ? "Сообщение отправлено" : "Не удалось отправить";
   }
 
   @NonNull
@@ -394,7 +428,7 @@ public class MaxAccessibilityFixer {
       sb.append(i + 1).append(": ").append(nodes.get(i).label);
       if (i < nodes.size() - 1) sb.append(". ");
     }
-    sb.append(". Свайп 3 пальцами вправо влево для навигации. Вниз нажать. Вверх отправить.");
+    sb.append(". Свайп 3 пальца для навигации.");
     return sb.toString();
   }
 
@@ -417,25 +451,8 @@ public class MaxAccessibilityFixer {
   }
 
   // =========================================================================
-  // Fallback
+  // Utility
   // =========================================================================
-
-  @Nullable
-  private String findAndFocusAnyEditText() {
-    AccessibilityNodeInfo root = service.getRootInActiveWindow();
-    if (root == null) return null;
-    AccessibilityNodeInfo et = findFirst(root, "EditText", 0);
-    if (et != null) {
-      et.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-      Rect b = new Rect();
-      et.getBoundsInScreen(b);
-      tapAtCenter(b);
-      root.recycle();
-      return "Поле ввода сообщения";
-    }
-    root.recycle();
-    return null;
-  }
 
   @Nullable
   private AccessibilityNodeInfo findFirst(AccessibilityNodeInfo node, String cls, int depth) {

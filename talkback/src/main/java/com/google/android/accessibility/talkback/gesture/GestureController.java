@@ -725,9 +725,13 @@ public class GestureController {
     AccessibilityNodeInfo rootNode = service.getRootInActiveWindow();
     if (rootNode != null) {
       CharSequence currentPackage = rootNode.getPackageName();
-      if (currentPackage != null) {
-        // Max messenger: handle hidden elements with special gestures
-        if (MaxAccessibilityFixer.PACKAGE_NAME.equals(currentPackage.toString())) {
+      String currentPkg = currentPackage != null ? currentPackage.toString() : "";
+
+      // Max messenger: check ALL windows (keyboard may be on top)
+      boolean isMax = MaxAccessibilityFixer.PACKAGE_NAME.equals(currentPkg)
+          || maxFixer.isMaxInForeground();
+
+      if (isMax) {
           // 3-finger single tap = focus input field
           if (gestureId == AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP) {
             String result = maxFixer.focusInputField();
@@ -781,18 +785,19 @@ public class GestureController {
         }
 
         // Per-app gesture override (any app)
-        String overrideAction =
-            perAppGestureManager.getGestureOverride(currentPackage.toString(), gestureId);
-        if (overrideAction != null) {
-          LogUtils.v(
-              LOG_TAG,
-              "Per-app gesture override for %s, gesture %d -> %s",
-              currentPackage,
-              gestureId,
-              overrideAction);
-          action = overrideAction;
+        if (!currentPkg.isEmpty()) {
+          String overrideAction =
+              perAppGestureManager.getGestureOverride(currentPkg, gestureId);
+          if (overrideAction != null) {
+            LogUtils.v(
+                LOG_TAG,
+                "Per-app gesture override for %s, gesture %d -> %s",
+                currentPkg,
+                gestureId,
+                overrideAction);
+            action = overrideAction;
+          }
         }
-      }
       rootNode.recycle();
     }
 
