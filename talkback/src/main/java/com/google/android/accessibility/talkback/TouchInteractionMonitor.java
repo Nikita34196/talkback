@@ -924,7 +924,29 @@ public class TouchInteractionMonitor
     // time minus lastMotionEventTransmissionLatency
     Performance.getInstance().onGestureRecognized(eventId, gestureId);
     if (gestureId == AccessibilityService.GESTURE_DOUBLE_TAP) {
+      // Max messenger fix: always use native controller.performClick() for Max.
+      // When serviceHandlesDoubleTap=true, dispatchGestureToMainThreadAndClear() clears
+      // the controller state, making subsequent controller.performClick() calls fail.
+      // This is why Max buttons don't respond to double-tap.
+      // Corvus works because it uses native click, not service-handled double-tap.
+      boolean useNativeClick = false;
       if (serviceHandlesDoubleTap) {
+        try {
+          for (android.view.accessibility.AccessibilityWindowInfo window : service.getWindows()) {
+            android.view.accessibility.AccessibilityNodeInfo root = window.getRoot();
+            if (root != null) {
+              CharSequence pkg = root.getPackageName();
+              root.recycle();
+              if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+                useNativeClick = true;
+                break;
+              }
+            }
+          }
+        } catch (Exception ignored) {}
+      }
+
+      if (serviceHandlesDoubleTap && !useNativeClick) {
         dispatchGestureToMainThreadAndClear(gestureEvent);
       } else {
         controller.performClick();

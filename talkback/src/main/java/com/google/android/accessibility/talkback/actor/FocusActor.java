@@ -145,26 +145,6 @@ public class FocusActor implements UserInputEventListener {
       return true;
     }
 
-    // Max messenger: skip nodeAction (returns true but does nothing for ImageViews).
-    // Go straight to TouchInteractionController.performClick() which sends a real
-    // click at the touch exploration position.
-    // IMPORTANT: check ONLY node package, NOT AppCompatState (it can be stale).
-    CharSequence pkg = node.getPackageName();
-    boolean isMaxNode = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
-
-    if (isMaxNode) {
-      if (gestureDetectionState.gestureDetector()) {
-        TouchInteractionController controller =
-            service.getTouchInteractionController(
-                AccessibilityWindowInfoUtils.getDisplayId(node.getWindow()));
-        if (controller != null) {
-          controller.performClick();
-          return true;
-        }
-      }
-      return simulateClickOnNode(service, node);
-    }
-
     if (PerformActionUtils.isNodeSupportAction(node, AccessibilityNodeInfoCompat.ACTION_CLICK)
         && pipeline.returnFeedback(eventId, Feedback.nodeAction(node, ACTION_CLICK.getId()))) {
       return true;
