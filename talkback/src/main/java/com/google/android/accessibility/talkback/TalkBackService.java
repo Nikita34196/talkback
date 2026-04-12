@@ -1037,6 +1037,35 @@ public class TalkBackService extends AccessibilityServiceCompat
     accessibilityEventProcessor.onAccessibilityEvent(event, eventId);
     perf.onHandlerDone(eventId);
 
+    // Max messenger fix: toggle FLAG_SERVICE_HANDLES_DOUBLE_TAP based on foreground app.
+    // When Max is in foreground, let the framework handle double-tap natively (click at position).
+    // This is how Corvus and other screen readers handle clicks — they don't intercept double-tap.
+    if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+      try {
+        boolean maxInForeground = false;
+        for (android.view.accessibility.AccessibilityWindowInfo window : getWindows()) {
+          android.view.accessibility.AccessibilityNodeInfo root = window.getRoot();
+          if (root != null) {
+            CharSequence pkg = root.getPackageName();
+            root.recycle();
+            if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+              maxInForeground = true;
+              break;
+            }
+          }
+        }
+        android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
+        if (info != null) {
+          if (maxInForeground) {
+            info.flags &= ~android.accessibilityservice.AccessibilityServiceInfo.FLAG_SERVICE_HANDLES_DOUBLE_TAP;
+          } else {
+            info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_SERVICE_HANDLES_DOUBLE_TAP;
+          }
+          setServiceInfo(info);
+        }
+      } catch (Exception ignored) {}
+    }
+
     if (brailleDisplay != null) {
       brailleDisplay.onAccessibilityEvent(event);
     }
