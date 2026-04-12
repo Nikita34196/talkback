@@ -88,7 +88,13 @@ public class MaxMessengerHelper {
   public static boolean isMaxMessenger(@Nullable AccessibilityNodeInfoCompat node) {
     if (node == null) return false;
     CharSequence pkg = node.getPackageName();
-    return isMaxMessenger(pkg);
+    if (isMaxMessenger(pkg)) return true;
+    // Fallback: check global state (package may be null on some nodes)
+    try {
+      return com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   /**
@@ -127,30 +133,110 @@ public class MaxMessengerHelper {
    */
   @Nullable
   private static String guessFromContext(@NonNull AccessibilityNodeInfoCompat node) {
-    // Check if it's a clickable ImageButton/ImageView without description
     String className = node.getClassName() != null ? node.getClassName().toString() : "";
 
+    if (className.contains("EditText")) {
+      return "Написать сообщение";
+    }
+
     if (className.contains("ImageButton") || className.contains("ImageView")) {
-      if (node.isClickable()) {
-        // Try to infer from position/parent
+      if (node.isClickable() || node.isLongClickable()) {
+        // Use position-based labeling for the bottom input bar
+        // Layout from screenshot: [emoji] [EditText] [attach] [camera] [mic/send]
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        node.getBoundsInScreen(bounds);
+
+        // Find EditText sibling to determine relative position
         AccessibilityNodeInfoCompat parent = node.getParent();
+        android.graphics.Rect editBounds = null;
         if (parent != null) {
-          String parentId = parent.getViewIdResourceName();
-          if (parentId != null) {
-            String lowerParentId = parentId.toLowerCase();
-            if (lowerParentId.contains("toolbar") || lowerParentId.contains("action_bar")) {
-              return "Кнопка панели";
+          for (int i = 0; i < parent.getChildCount(); i++) {
+            AccessibilityNodeInfoCompat sibling = parent.getChild(i);
+            if (sibling != null) {
+              String sibClass = sibling.getClassName() != null
+                  ? sibling.getClassName().toString() : "";
+              if (sibClass.contains("EditText")) {
+                editBounds = new android.graphics.Rect();
+                sibling.getBoundsInScreen(editBounds);
+                break;
+              }
             }
-            if (lowerParentId.contains("input") || lowerParentId.contains("compose")) {
-              return "Кнопка ввода";
+          }
+          // Also check grandparent for EditText
+          if (editBounds == null) {
+            AccessibilityNodeInfoCompat grandparent = parent.getParent();
+            if (grandparent != null) {
+              editBounds = findEditTextBounds(grandparent);
             }
           }
         }
+
+        if (editBounds != null && editBounds.height() > 0) {
+          boolean sameRow = Math.abs(bounds.centerY() - editBounds.centerY()) < 80;
+          if (sameRow) {
+            if (bounds.right <= editBounds.left) {
+              return "Эмодзи";
+            }
+            if (bounds.left >= editBounds.right) {
+              // Count position from right: rightmost = send/mic, then camera, then attach
+              int buttonsToRight = 0;
+              if (parent != null) {
+                for (int i = 0; i < parent.getChildCount(); i++) {
+                  AccessibilityNodeInfoCompat sib = parent.getChild(i);
+                  if (sib != null) {
+                    android.graphics.Rect sibBounds = new android.graphics.Rect();
+                    sib.getBoundsInScreen(sibBounds);
+                    if (sibBounds.left > bounds.right
+                        && Math.abs(sibBounds.centerY() - bounds.centerY()) < 80) {
+                      buttonsToRight++;
+                    }
+                  }
+                }
+              }
+              if (buttonsToRight == 0) return "Голосовое сообщение";
+              if (buttonsToRight == 1) return "Камера";
+              if (buttonsToRight == 2) return "Прикрепить файл";
+              return "Кнопка";
+            }
+          }
+        }
+
+        // Fallback: use rough screen position
+        // Assume 1080px width screen, bottom bar
+        if (bounds.centerX() < 150) return "Эмодзи";
+        if (bounds.centerX() > 900) return "Голосовое сообщение";
+        if (bounds.centerX() > 700) return "Камера";
+        if (bounds.centerX() > 500) return "Прикрепить файл";
+
         return "Кнопка";
       }
-      return "Изображение";
+      return null; // non-clickable image, don't label
     }
 
+    if (className.contains("Button") && node.isClickable()) {
+      return "Кнопка";
+    }
+
+    return null;
+  }
+
+  /** Recursively find EditText bounds in a subtree. */
+  @Nullable
+  private static android.graphics.Rect findEditTextBounds(
+      @NonNull AccessibilityNodeInfoCompat node) {
+    String cls = node.getClassName() != null ? node.getClassName().toString() : "";
+    if (cls.contains("EditText")) {
+      android.graphics.Rect b = new android.graphics.Rect();
+      node.getBoundsInScreen(b);
+      return b;
+    }
+    for (int i = 0; i < node.getChildCount() && i < 20; i++) {
+      AccessibilityNodeInfoCompat child = node.getChild(i);
+      if (child != null) {
+        android.graphics.Rect result = findEditTextBounds(child);
+        if (result != null) return result;
+      }
+    }
     return null;
   }
 

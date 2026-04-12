@@ -442,6 +442,11 @@ public class MaxAccessibilityFixer {
   // Coordinate tap
   // =========================================================================
 
+  /** Public method to tap at the center of given bounds. Used by GestureController. */
+  public boolean tapByCoordinates(Rect bounds) {
+    return tapAtCenter(bounds);
+  }
+
   private boolean tapAtCenter(Rect bounds) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false;
     int x = bounds.centerX();

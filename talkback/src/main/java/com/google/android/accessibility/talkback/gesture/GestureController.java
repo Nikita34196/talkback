@@ -74,6 +74,7 @@ import static com.google.android.accessibility.utils.traversal.TraversalStrategy
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.FingerprintGestureController;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.graphics.Rect;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.AudioManager;
@@ -456,6 +457,23 @@ public class GestureController {
       if (SelectorController.getCurrentSetting(service).equals(Setting.ACTIONS)) {
         selectorController.activateCurrentAction(eventId);
       } else {
+        // Max messenger: use coordinate tap for ImageView elements that don't support ACTION_CLICK
+        if (AppCompatState.isMaxMessengerActive()) {
+          AccessibilityNodeInfoCompat focused =
+              accessibilityFocusMonitor.getAccessibilityFocus(/* useInputFocusIfEmpty= */ false);
+          if (focused != null) {
+            String cls = focused.getClassName() != null ? focused.getClassName().toString() : "";
+            if (cls.contains("ImageView") || cls.contains("ImageButton")) {
+              Rect bounds = new Rect();
+              focused.getBoundsInScreen(bounds);
+              if (bounds.width() > 0 && bounds.height() > 0) {
+                maxFixer.tapByCoordinates(bounds);
+                pipeline.returnFeedback(eventId, Feedback.speech("Нажато"));
+                return;
+              }
+            }
+          }
+        }
         result = pipeline.returnFeedback(eventId, Feedback.focus(CLICK_CURRENT));
       }
     } else if (FeatureFlagReader.enableDoubleClickKeyboard(service)

@@ -339,6 +339,14 @@ public class AccessibilityNodeFeedbackUtils {
         && TextUtils.isEmpty(nodeTextOrLabelId)
         && TextUtils.isEmpty(nodeHintText)
         && TextUtils.isEmpty(nodeDescriptionFromLabelNode)) {
+      // Max messenger: try position-based label before falling back to "без ярлыка"
+      if (MaxMessengerHelper.isMaxMessenger(node)
+          || com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive()) {
+        String maxLabel = MaxMessengerHelper.getLabelForNode(node);
+        if (maxLabel != null) {
+          return maxLabel;
+        }
+      }
       LogUtils.v(
           TAG, " getUnlabelledNodeDescription return Unlabelled/nodeRole because no text info");
       return TextUtils.isEmpty(nodeDescription)
