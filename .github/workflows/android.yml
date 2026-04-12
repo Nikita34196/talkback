@@ -3,7 +3,7 @@ name: Build TalkBack
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:  # кнопка ручного запуска
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -25,11 +25,11 @@ jobs:
       - name: Write local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Setup Gradle 7.6.4
+      - name: Setup Gradle 8.13
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-7.6.4-bin.zip -P /tmp/
-          sudo unzip -q /tmp/gradle-7.6.4-bin.zip -d /opt/gradle
-          echo "/opt/gradle/gradle-7.6.4/bin" >> $GITHUB_PATH
+          wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -P /tmp/
+          sudo unzip -q /tmp/gradle-8.13-bin.zip -d /opt/gradle
+          echo "/opt/gradle/gradle-8.13/bin" >> $GITHUB_PATH
 
       - name: Build Debug APK
         run: gradle assemblePhoneDebug --no-daemon --stacktrace
