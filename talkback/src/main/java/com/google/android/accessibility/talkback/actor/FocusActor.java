@@ -145,9 +145,9 @@ public class FocusActor implements UserInputEventListener {
       return true;
     }
 
-    // Max messenger fix: performAction(ACTION_CLICK) returns true but doesn't
-    // actually click ImageView/ImageButton elements. Go straight to coordinate tap.
-    // EditText works fine with performAction (it opens keyboard).
+    // Max messenger: skip nodeAction (returns true but does nothing for ImageViews).
+    // Go straight to TouchInteractionController.performClick() which sends a real
+    // click at the touch exploration position — this is what makes clicks work.
     CharSequence pkg = node.getPackageName();
     boolean isMaxNode = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
     if (!isMaxNode) {
@@ -155,14 +155,19 @@ public class FocusActor implements UserInputEventListener {
         isMaxNode = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
       } catch (Exception ignored) {}
     }
-    if (isMaxNode && node.isClickable()) {
-      String className = node.getClassName() != null ? node.getClassName().toString() : "";
-      if (className.contains("EditText")) {
-        // EditText: use standard performAction (opens keyboard)
-        node.performAction(AccessibilityNodeInfoCompat.ACTION_CLICK);
-        return true;
+
+    if (isMaxNode) {
+      // Use the native touch interaction click — same mechanism as standard TalkBack
+      if (gestureDetectionState.gestureDetector()) {
+        TouchInteractionController controller =
+            service.getTouchInteractionController(
+                AccessibilityWindowInfoUtils.getDisplayId(node.getWindow()));
+        if (controller != null) {
+          controller.performClick();
+          return true;
+        }
       }
-      // ImageView/ImageButton/other: simulate click at coordinates
+      // Fallback for Max if controller unavailable
       return simulateClickOnNode(service, node);
     }
 
