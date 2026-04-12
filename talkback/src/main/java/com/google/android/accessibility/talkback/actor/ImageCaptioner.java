@@ -95,6 +95,8 @@ import com.google.android.accessibility.talkback.Feedback.GeminiRequest;
 import com.google.android.accessibility.talkback.Feedback.TriggerIntent.Action;
 import com.google.android.accessibility.talkback.Interpretation;
 import com.google.android.accessibility.talkback.Pipeline;
+import com.google.android.accessibility.talkback.actor.anthropic.AnthropicIconDescriber;
+import com.google.android.accessibility.talkback.appcompat.MaxMessengerHelper;
 import com.google.android.accessibility.talkback.PrimesController;
 import com.google.android.accessibility.talkback.PrimesController.TimerAction;
 import com.google.android.accessibility.talkback.R;
@@ -211,6 +213,7 @@ public class ImageCaptioner extends Handler
 
   private final AccessibilityService service;
   private Pipeline.FeedbackReturner pipeline;
+  private AnthropicIconDescriber anthropicDescriber;
   private ActorState actorState;
   private final SharedPreferences prefs;
   private final ImageCaptionStorage imageCaptionStorage;
@@ -269,6 +272,7 @@ public class ImageCaptioner extends Handler
     this.primesController = primesController;
     this.moduleStateManager = moduleStateManager;
     mainHandler = new Handler(Looper.getMainLooper());
+    anthropicDescriber = new AnthropicIconDescriber(service);
     initialize();
   }
 
@@ -294,6 +298,7 @@ public class ImageCaptioner extends Handler
             DownloaderFactory.create(service.getApplication()),
             DownloaderFactory.legacy(service.getApplication()));
     mainHandler = new Handler(Looper.getMainLooper());
+    anthropicDescriber = new AnthropicIconDescriber(service);
     initialize();
   }
 
@@ -1405,6 +1410,32 @@ public class ImageCaptioner extends Handler
     }
 
     if (hasCaptionRequest) {
+      return;
+    }
+
+    // Anthropic API fallback: if no standard caption was requested and the node is unlabelled,
+    // try describing the icon using Claude Vision API.
+    if (anthropicDescriber != null && anthropicDescriber.isEnabled()
+        && captionNodeType == UNLABELLED_VIEW) {
+      LogUtils.v(TAG, "Attempting Anthropic icon description for unlabelled view.");
+      anthropicDescriber.describeIcon(screens.croppedScreenCapture(),
+          new AnthropicIconDescriber.DescriptionCallback() {
+            @Override
+            public void onSuccess(String description) {
+              LogUtils.v(TAG, "Anthropic icon description: %s", description);
+              if (pipeline != null) {
+                pipeline.returnFeedback(
+                    EVENT_ID_UNTRACKED,
+                    Feedback.speech(description,
+                        QUEUE_MODE_UNINTERRUPTIBLE_BY_NEW_SPEECH_CAN_IGNORE_INTERRUPTS)
+                        .setFlags(FLAG_FORCE_FEEDBACK | FLAG_NO_DEVICE_SLEEP));
+              }
+            }
+            @Override
+            public void onError(String errorMessage) {
+              LogUtils.w(TAG, "Anthropic icon description failed: %s", errorMessage);
+            }
+          });
       return;
     }
 

@@ -32,6 +32,7 @@ import com.google.android.accessibility.talkback.compositor.Compositor.HandleEve
 import com.google.android.accessibility.talkback.flags.FeatureFlagReader;
 import com.google.android.accessibility.talkback.imagecaption.ImageContents;
 import com.google.android.accessibility.talkback.imagecaption.Result;
+import com.google.android.accessibility.talkback.appcompat.MaxMessengerHelper;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
 import com.google.android.accessibility.utils.BuildVersionUtils;
 import com.google.android.accessibility.utils.LocaleUtils;
@@ -141,6 +142,13 @@ public class AccessibilityNodeFeedbackUtils {
         getNodeTextOrLabelDescription(node, context, imageContents, globalVariables);
     if (!TextUtils.isEmpty(nodeTextOrLabel)) {
       return nodeTextOrLabel;
+    }
+    // Max messenger: try to provide a better label for unlabeled nodes.
+    if (MaxMessengerHelper.isMaxMessenger(node)) {
+      String maxLabel = MaxMessengerHelper.getLabelForNode(node);
+      if (maxLabel != null) {
+        return maxLabel;
+      }
     }
     // Fallbacks to element IDs.
     return globalVariables.getSpeakElementIds()

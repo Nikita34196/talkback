@@ -1,0 +1,61 @@
+name: ScreenReader TB Build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*.*.*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Write local.properties
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Setup Gradle 8.13
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -P /tmp/
+          sudo unzip -q /tmp/gradle-8.13-bin.zip -d /opt/gradle
+          echo "/opt/gradle/gradle-8.13/bin" >> $GITHUB_PATH
+
+      - name: Build Debug APK
+        run: gradle assemblePhoneDebug --no-daemon --stacktrace
+
+      - name: Find APK
+        run: find . -name "*.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenreader-tb-debug
+          path: "**/*.apk"
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ScreenReader TB ${{ github.ref_name }}
+          body: |
+            ## ScreenReader TB ${{ github.ref_name }}
+            Модифицированный TalkBack:
+            - Anthropic AI для распознавания иконок
+            - Улучшенная поддержка мессенджера Max
+            - Настраиваемые жесты для приложений
+          files: "**/*.apk"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

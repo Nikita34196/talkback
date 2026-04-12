@@ -73,6 +73,7 @@ import static com.google.android.accessibility.utils.traversal.TraversalStrategy
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.FingerprintGestureController;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.AudioManager;
@@ -99,6 +100,7 @@ import com.google.android.accessibility.talkback.focusmanagement.AccessibilityFo
 import com.google.android.accessibility.talkback.focusmanagement.NavigationTarget;
 import com.google.android.accessibility.talkback.focusmanagement.interpreter.ScreenStateMonitor;
 import com.google.android.accessibility.talkback.gesture.GestureShortcutMapping.TalkbackAction;
+import com.google.android.accessibility.talkback.gesture.PerAppGestureManager;
 import com.google.android.accessibility.talkback.interpreters.AccessibilityFocusInterpreter;
 import com.google.android.accessibility.talkback.menurules.RuleTextFormatting;
 import com.google.android.accessibility.talkback.monitor.BatteryMonitor;
@@ -161,6 +163,7 @@ public class GestureController {
   private final SpeechControllerImpl speaker;
   private final ScreenStateMonitor.State screenState;
   private final ProcessorPhoneticLetters processorPhoneticLetters;
+  private final PerAppGestureManager perAppGestureManager;
 
   private final @NonNull Map<Integer, Integer> captureGestureIdToAnnouncements = new HashMap<>();
   private final @NonNull Map<Integer, Integer> captureFingerprintGestureIdToAnnouncements =
@@ -210,6 +213,7 @@ public class GestureController {
     this.speaker = speaker;
     this.screenState = screenState;
     this.processorPhoneticLetters = processorPhoneticLetters;
+    this.perAppGestureManager = new PerAppGestureManager(service);
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -713,6 +717,27 @@ public class GestureController {
     }
 
     String action = gestureShortcutMapping.getActionKeyFromGestureId(gestureId);
+
+    // Per-app gesture override: check if the current foreground app has a custom action.
+    AccessibilityNodeInfo rootNode = service.getRootInActiveWindow();
+    if (rootNode != null) {
+      CharSequence currentPackage = rootNode.getPackageName();
+      if (currentPackage != null) {
+        String overrideAction =
+            perAppGestureManager.getGestureOverride(currentPackage.toString(), gestureId);
+        if (overrideAction != null) {
+          LogUtils.v(
+              LOG_TAG,
+              "Per-app gesture override for %s, gesture %d -> %s",
+              currentPackage,
+              gestureId,
+              overrideAction);
+          action = overrideAction;
+        }
+      }
+      rootNode.recycle();
+    }
+
     // Override the action if the current granularity is row/column.
     if (actorState.getDirectionNavigation().getCurrentGranularity()
         == CursorGranularity.ROW_COLUMN) {
