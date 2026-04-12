@@ -143,9 +143,10 @@ public class AccessibilityNodeFeedbackUtils {
     if (!TextUtils.isEmpty(nodeTextOrLabel)) {
       return nodeTextOrLabel;
     }
-    // Max messenger: try to provide a better label for unlabeled nodes.
-    if (MaxMessengerHelper.isMaxMessenger(node)) {
-      String maxLabel = MaxMessengerHelper.getLabelForNode(node);
+    // Max messenger: label unlabeled elements by position relative to EditText.
+    // Check by walking up to find root package, since individual nodes may lack packageName.
+    if (isInMaxMessenger(node)) {
+      String maxLabel = labelMaxNode(node);
       if (maxLabel != null) {
         return maxLabel;
       }
@@ -340,9 +341,8 @@ public class AccessibilityNodeFeedbackUtils {
         && TextUtils.isEmpty(nodeHintText)
         && TextUtils.isEmpty(nodeDescriptionFromLabelNode)) {
       // Max messenger: try position-based label before falling back to "без ярлыка"
-      if (MaxMessengerHelper.isMaxMessenger(node)
-          || com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive()) {
-        String maxLabel = MaxMessengerHelper.getLabelForNode(node);
+      if (isInMaxMessenger(node)) {
+        String maxLabel = labelMaxNode(node);
         if (maxLabel != null) {
           return maxLabel;
         }
@@ -778,5 +778,139 @@ public class AccessibilityNodeFeedbackUtils {
       return text == null ? "" : LocaleUtils.wrapWithLocaleSpan(text, userPreferredLocale);
     }
     return text == null ? "" : text;
+  }
+
+  /**
+   * Checks if the node belongs to Max messenger by walking up the parent chain.
+   * This is more reliable than checking node.getPackageName() which can be null.
+   */
+  private static boolean isInMaxMessenger(AccessibilityNodeInfoCompat node) {
+    // Direct check
+    CharSequence pkg = node.getPackageName();
+    if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+      return true;
+    }
+    // Walk up parents (max 10 levels)
+    AccessibilityNodeInfoCompat current = node.getParent();
+    for (int i = 0; i < 10 && current != null; i++) {
+      pkg = current.getPackageName();
+      if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+        return true;
+      }
+      current = current.getParent();
+    }
+    // Last resort: global flag
+    try {
+      return com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /**
+   * Labels a Max messenger node by its position relative to the EditText input field.
+   * Bottom bar layout: [emoji] [EditText] [attach] [camera] [mic/send]
+   */
+  @Nullable
+  private static String labelMaxNode(AccessibilityNodeInfoCompat node) {
+    String className = node.getClassName() != null ? node.getClassName().toString() : "";
+
+    if (className.contains("EditText")) {
+      return "Написать сообщение";
+    }
+
+    if (!node.isClickable() && !className.contains("ImageView") && !className.contains("Button")) {
+      return null;
+    }
+
+    android.graphics.Rect bounds = new android.graphics.Rect();
+    node.getBoundsInScreen(bounds);
+    if (bounds.width() <= 0 || bounds.height() <= 0) {
+      return null;
+    }
+
+    // Try to find EditText in siblings or nearby nodes
+    android.graphics.Rect editBounds = findEditTextBoundsViaParent(node);
+
+    if (editBounds != null && editBounds.height() > 0) {
+      boolean sameRow = Math.abs(bounds.centerY() - editBounds.centerY()) < 80;
+      if (sameRow) {
+        // Left of EditText = emoji
+        if (bounds.right <= editBounds.left + 20) {
+          return "Эмодзи";
+        }
+        // Right of EditText = action buttons, rightmost first
+        if (bounds.left >= editBounds.right - 20) {
+          // Count siblings to the right of this node
+          int siblingsToRight = countSiblingsToRight(node, bounds);
+          if (siblingsToRight == 0) return "Голосовое сообщение";
+          if (siblingsToRight == 1) return "Камера";
+          if (siblingsToRight == 2) return "Прикрепить файл";
+          return "Кнопка";
+        }
+      }
+    }
+
+    // Fallback: pure position-based for common screen widths
+    if (bounds.centerX() < 120) return "Эмодзи";
+
+    return "Кнопка";
+  }
+
+  @Nullable
+  private static android.graphics.Rect findEditTextBoundsViaParent(
+      AccessibilityNodeInfoCompat node) {
+    // Check siblings
+    AccessibilityNodeInfoCompat parent = node.getParent();
+    if (parent != null) {
+      android.graphics.Rect result = searchForEditText(parent, 0);
+      if (result != null) return result;
+      // Check grandparent
+      AccessibilityNodeInfoCompat grandparent = parent.getParent();
+      if (grandparent != null) {
+        result = searchForEditText(grandparent, 0);
+        if (result != null) return result;
+      }
+    }
+    return null;
+  }
+
+  @Nullable
+  private static android.graphics.Rect searchForEditText(
+      AccessibilityNodeInfoCompat node, int depth) {
+    if (depth > 5) return null;
+    String cls = node.getClassName() != null ? node.getClassName().toString() : "";
+    if (cls.contains("EditText")) {
+      android.graphics.Rect b = new android.graphics.Rect();
+      node.getBoundsInScreen(b);
+      if (b.width() > 0) return b;
+    }
+    for (int i = 0; i < node.getChildCount() && i < 15; i++) {
+      AccessibilityNodeInfoCompat child = node.getChild(i);
+      if (child != null) {
+        android.graphics.Rect r = searchForEditText(child, depth + 1);
+        if (r != null) return r;
+      }
+    }
+    return null;
+  }
+
+  private static int countSiblingsToRight(
+      AccessibilityNodeInfoCompat node, android.graphics.Rect nodeBounds) {
+    AccessibilityNodeInfoCompat parent = node.getParent();
+    if (parent == null) return -1;
+    int count = 0;
+    for (int i = 0; i < parent.getChildCount(); i++) {
+      AccessibilityNodeInfoCompat sib = parent.getChild(i);
+      if (sib != null) {
+        android.graphics.Rect sibBounds = new android.graphics.Rect();
+        sib.getBoundsInScreen(sibBounds);
+        boolean sameRow = Math.abs(sibBounds.centerY() - nodeBounds.centerY()) < 80;
+        if (sameRow && sibBounds.left > nodeBounds.right) {
+          count++;
+        }
+      }
+    }
+    return count;
   }
 }
