@@ -145,10 +145,9 @@ public class FocusActor implements UserInputEventListener {
       return true;
     }
 
-    // Max messenger fix: force direct ACTION_CLICK + coordinate tap fallback.
-    // Max elements are clickable but don't list ACTION_CLICK in supported actions,
-    // so isNodeSupportAction fails. Also skip TouchInteractionController which
-    // returns true but doesn't actually click hidden elements.
+    // Max messenger fix: performAction(ACTION_CLICK) returns true but doesn't
+    // actually click ImageView/ImageButton elements. Go straight to coordinate tap.
+    // EditText works fine with performAction (it opens keyboard).
     CharSequence pkg = node.getPackageName();
     boolean isMaxNode = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
     if (!isMaxNode) {
@@ -157,11 +156,13 @@ public class FocusActor implements UserInputEventListener {
       } catch (Exception ignored) {}
     }
     if (isMaxNode && node.isClickable()) {
-      // Try direct performAction first
-      if (node.performAction(AccessibilityNodeInfoCompat.ACTION_CLICK)) {
+      String className = node.getClassName() != null ? node.getClassName().toString() : "";
+      if (className.contains("EditText")) {
+        // EditText: use standard performAction (opens keyboard)
+        node.performAction(AccessibilityNodeInfoCompat.ACTION_CLICK);
         return true;
       }
-      // Fallback: simulate click at coordinates
+      // ImageView/ImageButton/other: simulate click at coordinates
       return simulateClickOnNode(service, node);
     }
 
