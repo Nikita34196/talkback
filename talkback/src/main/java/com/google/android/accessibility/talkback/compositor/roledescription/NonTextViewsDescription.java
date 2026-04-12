@@ -31,17 +31,141 @@ import com.google.android.accessibility.utils.Role;
  */
 public final class NonTextViewsDescription implements RoleDescription {
 
+  private static final String MAX_PACKAGE = "ru.oneme.app";
   private final ImageContents imageContents;
 
   NonTextViewsDescription(ImageContents imageContents) {
     this.imageContents = imageContents;
   }
 
+  /**
+   * Tries to label a Max messenger element by its position relative to the EditText.
+   * Returns null if not in Max or can't determine label.
+   */
+  private static String tryLabelMaxElement(AccessibilityNodeInfoCompat node) {
+    // Check if this node is from Max — try node itself, then parents
+    if (!isFromMax(node)) {
+      return null;
+    }
+
+    String className = node.getClassName() != null ? node.getClassName().toString() : "";
+    if (className.contains("EditText")) {
+      return "Написать сообщение";
+    }
+
+    // Find EditText sibling to determine relative position
+    android.graphics.Rect nodeBounds = new android.graphics.Rect();
+    node.getBoundsInScreen(nodeBounds);
+    if (nodeBounds.width() <= 0) return null;
+
+    android.graphics.Rect editBounds = findEditTextInNearby(node);
+    if (editBounds != null && editBounds.height() > 0) {
+      boolean sameRow = Math.abs(nodeBounds.centerY() - editBounds.centerY()) < 80;
+      if (sameRow) {
+        if (nodeBounds.right <= editBounds.left + 20) {
+          return "Эмодзи";
+        }
+        if (nodeBounds.left >= editBounds.right - 20) {
+          int toRight = countButtonsToRight(node, nodeBounds);
+          if (toRight == 0) return "Голосовое сообщение";
+          if (toRight == 1) return "Камера";
+          if (toRight == 2) return "Прикрепить файл";
+          return "Кнопка";
+        }
+      }
+    }
+
+    // Fallback: screen-position based (approximate)
+    if (nodeBounds.centerX() < 120) return "Эмодзи";
+    return node.isClickable() ? "Кнопка" : null;
+  }
+
+  private static boolean isFromMax(AccessibilityNodeInfoCompat node) {
+    // Check node itself
+    CharSequence pkg = node.getPackageName();
+    if (MAX_PACKAGE.equals(pkg != null ? pkg.toString() : "")) return true;
+    // Check parents (up to 15 levels)
+    AccessibilityNodeInfoCompat current = node;
+    for (int i = 0; i < 15; i++) {
+      AccessibilityNodeInfoCompat parent = current.getParent();
+      if (parent == null) break;
+      pkg = parent.getPackageName();
+      if (MAX_PACKAGE.equals(pkg != null ? pkg.toString() : "")) return true;
+      current = parent;
+    }
+    // Global flag fallback
+    try {
+      return com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private static android.graphics.Rect findEditTextInNearby(AccessibilityNodeInfoCompat node) {
+    // Search in parent and grandparent
+    AccessibilityNodeInfoCompat parent = node.getParent();
+    for (int level = 0; level < 3 && parent != null; level++) {
+      for (int i = 0; i < parent.getChildCount() && i < 20; i++) {
+        AccessibilityNodeInfoCompat child = parent.getChild(i);
+        if (child != null) {
+          String cls = child.getClassName() != null ? child.getClassName().toString() : "";
+          if (cls.contains("EditText")) {
+            android.graphics.Rect b = new android.graphics.Rect();
+            child.getBoundsInScreen(b);
+            if (b.width() > 0) return b;
+          }
+          // Check one level deeper
+          for (int j = 0; j < child.getChildCount() && j < 10; j++) {
+            AccessibilityNodeInfoCompat grandchild = child.getChild(j);
+            if (grandchild != null) {
+              cls = grandchild.getClassName() != null ? grandchild.getClassName().toString() : "";
+              if (cls.contains("EditText")) {
+                android.graphics.Rect b = new android.graphics.Rect();
+                grandchild.getBoundsInScreen(b);
+                if (b.width() > 0) return b;
+              }
+            }
+          }
+        }
+      }
+      parent = parent.getParent();
+    }
+    return null;
+  }
+
+  private static int countButtonsToRight(
+      AccessibilityNodeInfoCompat node, android.graphics.Rect nodeBounds) {
+    AccessibilityNodeInfoCompat parent = node.getParent();
+    if (parent == null) return -1;
+    int count = 0;
+    for (int i = 0; i < parent.getChildCount(); i++) {
+      AccessibilityNodeInfoCompat sib = parent.getChild(i);
+      if (sib != null && sib != node) {
+        android.graphics.Rect sb = new android.graphics.Rect();
+        sib.getBoundsInScreen(sb);
+        if (sb.left > nodeBounds.right
+            && Math.abs(sb.centerY() - nodeBounds.centerY()) < 80
+            && sb.width() > 10) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
   @Override
   public CharSequence nodeName(
       AccessibilityNodeInfoCompat node, Context context, GlobalVariables globalVariables) {
-    return AccessibilityNodeFeedbackUtils.getNodeTextOrLabelOrIdDescription(
+    CharSequence result = AccessibilityNodeFeedbackUtils.getNodeTextOrLabelOrIdDescription(
         node, context, imageContents, globalVariables);
+    // If no label found, try Max messenger position-based labeling
+    if (TextUtils.isEmpty(result) && node != null) {
+      String maxLabel = tryLabelMaxElement(node);
+      if (maxLabel != null) {
+        return maxLabel;
+      }
+    }
+    return result;
   }
 
   @Override
@@ -82,6 +206,13 @@ public final class NonTextViewsDescription implements RoleDescription {
         AccessibilityNodeFeedbackUtils.getNodeTextOrLabelOrIdDescription(
             node, context, imageContents, globalVariables);
     if (TextUtils.isEmpty(nodeTextOrLabelOrId)) {
+      // Try Max messenger labeling before saying "без ярлыка"
+      if (node != null) {
+        String maxLabel = tryLabelMaxElement(node);
+        if (maxLabel != null) {
+          return "";
+        }
+      }
       return context.getString(R.string.value_unlabelled);
     }
     return "";
