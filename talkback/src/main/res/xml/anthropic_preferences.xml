@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <SwitchPreference
+        android:key="pref_anthropic_icon_detection_enabled"
+        android:title="@string/pref_anthropic_enabled_title"
+        android:summary="@string/pref_anthropic_enabled_summary"
+        android:defaultValue="false" />
+
+    <EditTextPreference
+        android:key="pref_anthropic_api_key"
+        android:title="@string/pref_anthropic_api_key_title"
+        android:summary="@string/pref_anthropic_api_key_summary"
+        android:dependency="pref_anthropic_icon_detection_enabled" />
+
+</PreferenceScreen>

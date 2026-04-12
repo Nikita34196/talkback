@@ -76,6 +76,10 @@
         android:fragment="com.google.android.accessibility.talkback.preference.base.GeminiSettingsFragment"
         android:key="@string/pref_gemini_settings_key"
         android:title="@string/title_pref_gemini_settings" />
+    <com.google.android.accessibility.material.preference.AccessibilitySuitePreference
+        android:fragment="com.google.android.accessibility.talkback.preference.base.AnthropicSettingsFragment"
+        android:key="@string/pref_anthropic_settings_key"
+        android:title="@string/pref_anthropic_settings_title" />
   </com.google.android.accessibility.material.preference.AccessibilitySuitePreferenceCategory>
   <com.google.android.accessibility.material.preference.AccessibilitySuitePreferenceCategory
       android:key="@string/pref_category_typing_key"

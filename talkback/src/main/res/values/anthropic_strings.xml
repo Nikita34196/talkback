@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Anthropic AI settings -->
+    <string name="pref_anthropic_settings_title">Anthropic AI</string>
+    <string name="pref_anthropic_enabled_title">AI распознавание иконок</string>
+    <string name="pref_anthropic_enabled_summary">Использовать Claude для описания неподписанных элементов интерфейса</string>
+    <string name="pref_anthropic_api_key_title">API ключ Claude</string>
+    <string name="pref_anthropic_api_key_summary">Получите ключ на console.anthropic.com</string>
+    <string name="pref_anthropic_settings_key">pref_anthropic_settings</string>
+</resources>
