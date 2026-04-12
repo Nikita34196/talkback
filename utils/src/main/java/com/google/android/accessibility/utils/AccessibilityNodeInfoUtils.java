@@ -855,14 +855,17 @@ public class AccessibilityNodeInfoUtils {
     }
 
     if (!isVisible(node)) {
+      // Even if not "visible" per standard check, force-focus Max messenger elements.
+      // Max marks input fields and buttons as not important for accessibility.
+      if (isMaxMessengerInteractiveNode(node)) {
+        return true;
+      }
       logShouldFocusNode(
           checkChildren, FOCUS_FAIL_NOT_VISIBLE, "Don't focus, is not visible: ", node);
       return false;
     }
 
-    // Force-focus interactive elements in Max messenger (ru.oneme.app).
-    // Max marks input fields and buttons as not important for accessibility,
-    // making them invisible to normal TalkBack navigation.
+    // Also check Max for visible-but-not-focusable elements.
     if (isMaxMessengerInteractiveNode(node)) {
       return true;
     }

@@ -166,6 +166,8 @@ public class GestureController {
   private final ProcessorPhoneticLetters processorPhoneticLetters;
   private final PerAppGestureManager perAppGestureManager;
   private final MaxAccessibilityFixer maxFixer;
+  /** When true, regular swipes in Max navigate hidden elements instead of standard tree. */
+  private boolean maxHiddenNavMode = false;
 
   private final @NonNull Map<Integer, Integer> captureGestureIdToAnnouncements = new HashMap<>();
   private final @NonNull Map<Integer, Integer> captureFingerprintGestureIdToAnnouncements =
@@ -732,40 +734,77 @@ public class GestureController {
           || maxFixer.isMaxInForeground();
 
       if (isMax) {
-          // 3-finger single tap = focus input field
+          // === MAX HIDDEN NAV MODE ===
+          // 3-finger single tap = toggle hidden elements navigation mode
           if (gestureId == AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP) {
+            maxHiddenNavMode = !maxHiddenNavMode;
+            if (maxHiddenNavMode) {
+              maxFixer.invalidateCache();
+              String summary = maxFixer.getHiddenElementsSummary();
+              pipeline.returnFeedback(eventId,
+                  Feedback.speech("Режим скрытых элементов включён. " + summary));
+            } else {
+              pipeline.returnFeedback(eventId,
+                  Feedback.speech("Режим скрытых элементов выключен"));
+            }
+            rootNode.recycle();
+            return;
+          }
+
+          // When hidden nav mode is ON, intercept regular swipes
+          if (maxHiddenNavMode) {
+            // Swipe right = next hidden element
+            if (gestureId == AccessibilityService.GESTURE_SWIPE_RIGHT
+                || gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_RIGHT) {
+              String label = maxFixer.navigateNextHidden();
+              if (label != null) {
+                pipeline.returnFeedback(eventId, Feedback.speech(label));
+              }
+              rootNode.recycle();
+              return;
+            }
+            // Swipe left = previous hidden element
+            if (gestureId == AccessibilityService.GESTURE_SWIPE_LEFT
+                || gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_LEFT) {
+              String label = maxFixer.navigatePreviousHidden();
+              if (label != null) {
+                pipeline.returnFeedback(eventId, Feedback.speech(label));
+              }
+              rootNode.recycle();
+              return;
+            }
+            // Double tap = click current hidden element
+            if (gestureId == AccessibilityService.GESTURE_DOUBLE_TAP) {
+              String result = maxFixer.clickCurrentHidden();
+              if (result != null) {
+                pipeline.returnFeedback(eventId, Feedback.speech(result));
+              }
+              rootNode.recycle();
+              return;
+            }
+          }
+
+          // 3-finger swipe up = send message (always works, any mode)
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_UP) {
+            String result = maxFixer.clickSendButton();
+            pipeline.returnFeedback(eventId,
+                Feedback.speech(result != null ? result : "Кнопка отправки не найдена"));
+            rootNode.recycle();
+            return;
+          }
+
+          // 3-finger double tap = focus input field (always works)
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_DOUBLE_TAP) {
             String result = maxFixer.focusInputField();
             pipeline.returnFeedback(eventId,
                 Feedback.speech(result != null ? result : "Поле ввода не найдено"));
+            // Exit hidden nav mode since user wants to type
+            maxHiddenNavMode = false;
             rootNode.recycle();
             return;
           }
-          // 3-finger double tap = scan and announce all hidden elements
-          if (gestureId == AccessibilityService.GESTURE_3_FINGER_DOUBLE_TAP) {
-            String summary = maxFixer.getHiddenElementsSummary();
-            pipeline.returnFeedback(eventId, Feedback.speech(summary));
-            rootNode.recycle();
-            return;
-          }
-          // 3-finger swipe right = next hidden element
-          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_RIGHT) {
-            String label = maxFixer.navigateNextHidden();
-            if (label != null) {
-              pipeline.returnFeedback(eventId, Feedback.speech(label));
-            }
-            rootNode.recycle();
-            return;
-          }
-          // 3-finger swipe left = previous hidden element
-          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_LEFT) {
-            String label = maxFixer.navigatePreviousHidden();
-            if (label != null) {
-              pipeline.returnFeedback(eventId, Feedback.speech(label));
-            }
-            rootNode.recycle();
-            return;
-          }
-          // 3-finger swipe down = click current hidden element
+
+          // 3-finger swipe down = click current hidden element (always works)
           if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_DOWN) {
             String result = maxFixer.clickCurrentHidden();
             if (result != null) {
@@ -774,14 +813,9 @@ public class GestureController {
             rootNode.recycle();
             return;
           }
-          // 3-finger swipe up = send message
-          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_UP) {
-            String result = maxFixer.clickSendButton();
-            pipeline.returnFeedback(eventId,
-                Feedback.speech(result != null ? result : "Кнопка отправки не найдена"));
-            rootNode.recycle();
-            return;
-          }
+        } else {
+          // Not in Max — disable hidden nav mode
+          maxHiddenNavMode = false;
         }
 
         // Per-app gesture override (any app)
