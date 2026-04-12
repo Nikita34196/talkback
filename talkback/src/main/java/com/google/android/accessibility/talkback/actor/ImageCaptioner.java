@@ -1426,9 +1426,10 @@ public class ImageCaptioner extends Handler
               if (pipeline != null) {
                 pipeline.returnFeedback(
                     EVENT_ID_UNTRACKED,
-                    Feedback.speech(description,
-                        QUEUE_MODE_UNINTERRUPTIBLE_BY_NEW_SPEECH_CAN_IGNORE_INTERRUPTS)
-                        .setFlags(FLAG_FORCE_FEEDBACK | FLAG_NO_DEVICE_SLEEP));
+                    Feedback.speech(
+                        description,
+                        SpeakOptions.create()
+                            .setFlags(FLAG_FORCE_FEEDBACK | FLAG_NO_DEVICE_SLEEP)));
               }
             }
             @Override
