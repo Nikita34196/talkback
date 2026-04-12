@@ -101,6 +101,7 @@ import com.google.android.accessibility.talkback.focusmanagement.NavigationTarge
 import com.google.android.accessibility.talkback.focusmanagement.interpreter.ScreenStateMonitor;
 import com.google.android.accessibility.talkback.gesture.GestureShortcutMapping.TalkbackAction;
 import com.google.android.accessibility.talkback.gesture.PerAppGestureManager;
+import com.google.android.accessibility.talkback.appcompat.MaxAccessibilityFixer;
 import com.google.android.accessibility.talkback.interpreters.AccessibilityFocusInterpreter;
 import com.google.android.accessibility.talkback.menurules.RuleTextFormatting;
 import com.google.android.accessibility.talkback.monitor.BatteryMonitor;
@@ -164,6 +165,7 @@ public class GestureController {
   private final ScreenStateMonitor.State screenState;
   private final ProcessorPhoneticLetters processorPhoneticLetters;
   private final PerAppGestureManager perAppGestureManager;
+  private final MaxAccessibilityFixer maxFixer;
 
   private final @NonNull Map<Integer, Integer> captureGestureIdToAnnouncements = new HashMap<>();
   private final @NonNull Map<Integer, Integer> captureFingerprintGestureIdToAnnouncements =
@@ -214,6 +216,7 @@ public class GestureController {
     this.screenState = screenState;
     this.processorPhoneticLetters = processorPhoneticLetters;
     this.perAppGestureManager = new PerAppGestureManager(service);
+    this.maxFixer = new MaxAccessibilityFixer(service);
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -723,6 +726,56 @@ public class GestureController {
     if (rootNode != null) {
       CharSequence currentPackage = rootNode.getPackageName();
       if (currentPackage != null) {
+        // Max messenger: handle hidden elements with special gestures
+        if (MaxAccessibilityFixer.PACKAGE_NAME.equals(currentPackage.toString())) {
+          // 3-finger single tap = focus input field
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP) {
+            if (maxFixer.focusInputField()) {
+              pipeline.returnFeedback(
+                  eventId, Feedback.speech("Поле ввода сообщения"));
+            } else {
+              pipeline.returnFeedback(
+                  eventId, Feedback.speech("Поле ввода не найдено"));
+            }
+            rootNode.recycle();
+            return;
+          }
+          // 3-finger double tap = scan and announce all hidden elements
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_DOUBLE_TAP) {
+            String summary = maxFixer.getHiddenElementsSummary();
+            pipeline.returnFeedback(eventId, Feedback.speech(summary));
+            rootNode.recycle();
+            return;
+          }
+          // 3-finger swipe right = next hidden element
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_RIGHT) {
+            String label = maxFixer.navigateNextHidden();
+            if (label != null) {
+              pipeline.returnFeedback(eventId, Feedback.speech(label));
+            }
+            rootNode.recycle();
+            return;
+          }
+          // 3-finger swipe left = previous hidden element
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_LEFT) {
+            String label = maxFixer.navigatePreviousHidden();
+            if (label != null) {
+              pipeline.returnFeedback(eventId, Feedback.speech(label));
+            }
+            rootNode.recycle();
+            return;
+          }
+          // 3-finger swipe down = click current hidden element
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_DOWN) {
+            if (maxFixer.clickCurrentHidden()) {
+              pipeline.returnFeedback(eventId, Feedback.speech("Нажато"));
+            }
+            rootNode.recycle();
+            return;
+          }
+        }
+
+        // Per-app gesture override (any app)
         String overrideAction =
             perAppGestureManager.getGestureOverride(currentPackage.toString(), gestureId);
         if (overrideAction != null) {
