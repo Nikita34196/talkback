@@ -145,6 +145,26 @@ public class FocusActor implements UserInputEventListener {
       return true;
     }
 
+    // Max messenger fix: force direct ACTION_CLICK + coordinate tap fallback.
+    // Max elements are clickable but don't list ACTION_CLICK in supported actions,
+    // so isNodeSupportAction fails. Also skip TouchInteractionController which
+    // returns true but doesn't actually click hidden elements.
+    CharSequence pkg = node.getPackageName();
+    boolean isMaxNode = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
+    if (!isMaxNode) {
+      try {
+        isMaxNode = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+      } catch (Exception ignored) {}
+    }
+    if (isMaxNode && node.isClickable()) {
+      // Try direct performAction first
+      if (node.performAction(AccessibilityNodeInfoCompat.ACTION_CLICK)) {
+        return true;
+      }
+      // Fallback: simulate click at coordinates
+      return simulateClickOnNode(service, node);
+    }
+
     if (PerformActionUtils.isNodeSupportAction(node, AccessibilityNodeInfoCompat.ACTION_CLICK)
         && pipeline.returnFeedback(eventId, Feedback.nodeAction(node, ACTION_CLICK.getId()))) {
       return true;
