@@ -8,31 +8,23 @@
 package com.google.android.accessibility.talkback.appcompat;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
 import android.graphics.Rect;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Actively fixes accessibility issues in Max messenger (ru.oneme.app).
- *
- * <p>Max messenger marks some interactive elements (input field, send button, attach button,
- * voice message button) as not important for accessibility, making them invisible to TalkBack.
- *
- * <p>This fixer:
- * <ul>
- *   <li>Scans the FULL node tree including hidden elements</li>
- *   <li>Finds EditText, ImageButton and other interactive elements</li>
- *   <li>Provides methods to focus and interact with them</li>
- *   <li>Overrides navigation to include hidden elements</li>
- * </ul>
+ * Fixes accessibility issues in Max messenger (ru.oneme.app).
+ * Deep-scans the node tree, finds hidden elements, provides navigation
+ * and interaction via coordinate-based clicking.
  */
 public class MaxAccessibilityFixer {
 
@@ -40,14 +32,11 @@ public class MaxAccessibilityFixer {
   public static final String PACKAGE_NAME = "ru.oneme.app";
 
   private final AccessibilityService service;
-
-  // Cached hidden interactive nodes found during last scan
   private final List<NodeInfo> hiddenNodes = new ArrayList<>();
   private int currentHiddenIndex = -1;
   private long lastScanTime = 0;
-  private static final long SCAN_CACHE_MS = 2000; // rescan every 2 seconds
+  private static final long SCAN_CACHE_MS = 2000;
 
-  /** Minimal info about a found node. */
   public static class NodeInfo {
     public final AccessibilityNodeInfo node;
     public final String className;
@@ -66,9 +55,6 @@ public class MaxAccessibilityFixer {
     this.service = service;
   }
 
-  /**
-   * Returns true if Max messenger is currently in foreground.
-   */
   public boolean isMaxInForeground() {
     AccessibilityNodeInfo root = service.getRootInActiveWindow();
     if (root == null) return false;
@@ -78,125 +64,65 @@ public class MaxAccessibilityFixer {
     return isMax;
   }
 
-  /**
-   * Deep-scans the Max UI tree and finds all interactive elements,
-   * including ones hidden from accessibility.
-   *
-   * @return list of found hidden interactive elements with labels
-   */
   @NonNull
   public List<NodeInfo> scanForHiddenElements() {
     long now = System.currentTimeMillis();
     if (now - lastScanTime < SCAN_CACHE_MS && !hiddenNodes.isEmpty()) {
       return hiddenNodes;
     }
-
-    hiddenNodes.clear();
-    currentHiddenIndex = -1;
-
+    clearCache();
     AccessibilityNodeInfo root = service.getRootInActiveWindow();
     if (root == null) return hiddenNodes;
-
     if (!PACKAGE_NAME.equals(
         root.getPackageName() != null ? root.getPackageName().toString() : "")) {
       root.recycle();
       return hiddenNodes;
     }
-
     deepScan(root, 0);
     root.recycle();
     lastScanTime = now;
-
-    Log.d(TAG, "Found " + hiddenNodes.size() + " hidden interactive elements in Max");
+    Log.d(TAG, "Found " + hiddenNodes.size() + " hidden elements in Max");
     return hiddenNodes;
   }
 
-  /**
-   * Recursively scans ALL nodes, finding interactive ones that are not
-   * accessibility-focusable (hidden from TalkBack).
-   */
   private void deepScan(AccessibilityNodeInfo node, int depth) {
     if (node == null || depth > 30) return;
-
-    boolean isInteractive = isInteractiveElement(node);
-    boolean isAccessibilityFocusable = node.isAccessibilityFocused()
-        || node.isFocusable()
-        || node.isScreenReaderFocusable();
-
-    // We want interactive elements that TalkBack can't normally reach
-    if (isInteractive && node.isVisibleToUser()) {
+    if (isInteractiveElement(node) && node.isVisibleToUser()) {
       String className = node.getClassName() != null ? node.getClassName().toString() : "";
-      String label = guessLabel(node, className);
-
-      // Check if this is likely hidden from TalkBack
-      if (!isAccessibilityFocusable || isEditTextWithoutFocus(node, className)) {
+      boolean isAccessible = node.isScreenReaderFocusable()
+          || (node.isClickable() && node.isFocusable()
+              && !TextUtils.isEmpty(node.getContentDescription()));
+      if (!isAccessible || (className.contains("EditText") && node.isEditable())) {
         Rect bounds = new Rect();
         node.getBoundsInScreen(bounds);
-
-        // Only add if it has reasonable size (not 0x0)
         if (bounds.width() > 10 && bounds.height() > 10) {
           hiddenNodes.add(new NodeInfo(
-              AccessibilityNodeInfo.obtain(node), className, label, bounds));
-          Log.d(TAG, "Found hidden element: " + label + " (" + className + ") at " + bounds);
+              AccessibilityNodeInfo.obtain(node), className,
+              guessLabel(node, className, bounds), bounds));
         }
       }
     }
-
-    // Recurse into ALL children
     for (int i = 0; i < node.getChildCount(); i++) {
       AccessibilityNodeInfo child = node.getChild(i);
-      if (child != null) {
-        deepScan(child, depth + 1);
-        // Don't recycle children - they might be stored in hiddenNodes
-      }
+      if (child != null) { deepScan(child, depth + 1); }
     }
   }
 
-  /**
-   * Returns true if this node is an interactive UI element.
-   */
   private boolean isInteractiveElement(AccessibilityNodeInfo node) {
-    if (node.isClickable() || node.isLongClickable() || node.isEditable()) {
-      return true;
-    }
-    String className = node.getClassName() != null ? node.getClassName().toString() : "";
-    return className.contains("EditText")
-        || className.contains("Button")
-        || className.contains("ImageButton")
-        || className.contains("ImageView");
+    if (node.isClickable() || node.isLongClickable() || node.isEditable()) return true;
+    String cn = node.getClassName() != null ? node.getClassName().toString() : "";
+    return cn.contains("EditText") || cn.contains("ImageButton");
   }
 
-  /**
-   * Check if this is an EditText that's not properly accessible.
-   */
-  private boolean isEditTextWithoutFocus(AccessibilityNodeInfo node, String className) {
-    return className.contains("EditText") && node.isEditable();
-  }
-
-  /**
-   * Guesses a Russian label for a hidden element based on class, ID, position.
-   */
   @NonNull
-  private String guessLabel(AccessibilityNodeInfo node, String className) {
-    // Check content description first
+  private String guessLabel(AccessibilityNodeInfo node, String className, Rect bounds) {
     CharSequence desc = node.getContentDescription();
-    if (!TextUtils.isEmpty(desc)) {
-      return desc.toString();
-    }
-
-    // Check hint text for EditText
+    if (!TextUtils.isEmpty(desc)) return desc.toString();
     CharSequence hint = node.getHintText();
-    if (!TextUtils.isEmpty(hint)) {
-      return hint.toString();
-    }
-
-    // Check text
+    if (!TextUtils.isEmpty(hint)) return hint.toString();
     CharSequence text = node.getText();
-    if (!TextUtils.isEmpty(text)) {
-      return text.toString();
-    }
+    if (!TextUtils.isEmpty(text)) return text.toString();
 
-    // Check view ID
     String viewId = node.getViewIdResourceName();
     if (!TextUtils.isEmpty(viewId)) {
       String id = viewId.toLowerCase();
@@ -211,187 +137,192 @@ public class MaxAccessibilityFixer {
       if (id.contains("search")) return "Поиск";
       if (id.contains("back")) return "Назад";
       if (id.contains("menu") || id.contains("more")) return "Меню";
-      if (id.contains("close")) return "Закрыть";
-      if (id.contains("reply")) return "Ответить";
-      if (id.contains("forward")) return "Переслать";
-      if (id.contains("delete")) return "Удалить";
       if (id.contains("play") || id.contains("pause")) return "Воспроизвести";
     }
 
-    // Guess by class and position
-    if (className.contains("EditText")) {
-      return "Поле ввода сообщения";
-    }
+    if (className.contains("EditText")) return "Поле ввода сообщения";
 
-    Rect bounds = new Rect();
-    node.getBoundsInScreen(bounds);
-    // Bottom area buttons
-    if (bounds.bottom > 1500) { // rough check for bottom area
+    // Guess by screen position
+    Rect screen = new Rect();
+    AccessibilityNodeInfo root = service.getRootInActiveWindow();
+    if (root != null) { root.getBoundsInScreen(screen); root.recycle(); }
+    int sh = screen.height() > 0 ? screen.height() : 2000;
+    int sw = screen.width() > 0 ? screen.width() : 1080;
+    if (bounds.top > sh * 0.8) {
       if (className.contains("ImageButton") || className.contains("ImageView")) {
-        if (bounds.right > 900) return "Кнопка отправки";
-        if (bounds.left < 200) return "Прикрепить";
+        if (bounds.centerX() > sw * 0.8) return "Отправить";
+        if (bounds.centerX() < sw * 0.2) return "Прикрепить";
         return "Кнопка ввода";
       }
     }
 
     if (className.contains("ImageButton")) return "Кнопка";
     if (className.contains("ImageView") && node.isClickable()) return "Кнопка-изображение";
-
-    return "Элемент управления";
+    return "Элемент";
   }
 
-  /**
-   * Tries to click/focus the input field in Max.
-   * Scans the tree and performs ACTION_CLICK on the first EditText found.
-   *
-   * @return true if an EditText was found and clicked
-   */
-  public boolean focusInputField() {
-    List<NodeInfo> nodes = scanForHiddenElements();
-    for (NodeInfo info : nodes) {
-      if (info.className.contains("EditText")) {
-        Log.d(TAG, "Focusing input field: " + info.label);
-        info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        info.node.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
-        return true;
-      }
-    }
-    // Fallback: try to find EditText in full tree even if not hidden
-    return findAndFocusEditText();
-  }
+  // === Navigation ===
 
-  /**
-   * Fallback method: searches entire tree for any EditText and focuses it.
-   */
-  private boolean findAndFocusEditText() {
-    AccessibilityNodeInfo root = service.getRootInActiveWindow();
-    if (root == null) return false;
-
-    AccessibilityNodeInfo editText = findFirstByClass(root, "EditText", 0);
-    if (editText != null) {
-      editText.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-      editText.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
-      Log.d(TAG, "Focused EditText via fallback");
-      root.recycle();
-      return true;
-    }
-    root.recycle();
-    return false;
-  }
-
-  /**
-   * Navigates to the next hidden element. Returns its label for announcement.
-   *
-   * @return label of the next hidden element, or null if none
-   */
   @Nullable
   public String navigateNextHidden() {
     List<NodeInfo> nodes = scanForHiddenElements();
     if (nodes.isEmpty()) return null;
-
     currentHiddenIndex = (currentHiddenIndex + 1) % nodes.size();
     NodeInfo info = nodes.get(currentHiddenIndex);
-
-    // Try to force accessibility focus
     info.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
-    return info.label;
+    return (currentHiddenIndex + 1) + " из " + nodes.size() + ": " + info.label;
   }
 
-  /**
-   * Navigates to the previous hidden element.
-   */
   @Nullable
   public String navigatePreviousHidden() {
     List<NodeInfo> nodes = scanForHiddenElements();
     if (nodes.isEmpty()) return null;
-
     currentHiddenIndex--;
     if (currentHiddenIndex < 0) currentHiddenIndex = nodes.size() - 1;
     NodeInfo info = nodes.get(currentHiddenIndex);
-
     info.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
-    return info.label;
+    return (currentHiddenIndex + 1) + " из " + nodes.size() + ": " + info.label;
   }
 
-  /**
-   * Clicks the currently selected hidden element.
-   *
-   * @return true if an element was clicked
-   */
-  public boolean clickCurrentHidden() {
-    if (currentHiddenIndex < 0 || currentHiddenIndex >= hiddenNodes.size()) return false;
+  // === Interaction ===
+
+  @Nullable
+  public String clickCurrentHidden() {
+    if (currentHiddenIndex < 0 || currentHiddenIndex >= hiddenNodes.size()) return null;
     NodeInfo info = hiddenNodes.get(currentHiddenIndex);
-    return info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    boolean clicked = info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    if (!clicked) clicked = tapAtCenter(info.bounds);
+    return clicked ? info.label + ", нажато" : "Не удалось нажать";
   }
 
-  /**
-   * Sets text in the input field of Max.
-   *
-   * @param text the text to type
-   * @return true if text was set
-   */
-  public boolean setInputText(@NonNull String text) {
-    AccessibilityNodeInfo root = service.getRootInActiveWindow();
-    if (root == null) return false;
-
-    AccessibilityNodeInfo editText = findFirstByClass(root, "EditText", 0);
-    if (editText != null) {
-      Bundle args = new Bundle();
-      args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
-      boolean result = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
-      root.recycle();
-      return result;
+  @Nullable
+  public String focusInputField() {
+    List<NodeInfo> nodes = scanForHiddenElements();
+    for (int i = 0; i < nodes.size(); i++) {
+      if (nodes.get(i).className.contains("EditText")) {
+        currentHiddenIndex = i;
+        NodeInfo info = nodes.get(i);
+        boolean ok = info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        if (!ok) ok = info.node.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+        if (!ok) tapAtCenter(info.bounds);
+        return info.label;
+      }
     }
-    root.recycle();
-    return false;
+    return findAndFocusAnyEditText();
   }
 
-  /**
-   * Gets all hidden elements as a readable summary for announcement.
-   */
+  @Nullable
+  public String clickSendButton() {
+    // Force rescan
+    lastScanTime = 0;
+    List<NodeInfo> nodes = scanForHiddenElements();
+
+    // By ID or label
+    for (int i = 0; i < nodes.size(); i++) {
+      NodeInfo info = nodes.get(i);
+      String id = info.node.getViewIdResourceName();
+      if ((id != null && id.toLowerCase().contains("send"))
+          || info.label.equals("Отправить")) {
+        currentHiddenIndex = i;
+        boolean clicked = info.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        if (!clicked) clicked = tapAtCenter(info.bounds);
+        return clicked ? "Сообщение отправлено" : "Не удалось отправить";
+      }
+    }
+
+    // Rightmost button in bottom area
+    Rect screen = new Rect();
+    AccessibilityNodeInfo root = service.getRootInActiveWindow();
+    if (root != null) { root.getBoundsInScreen(screen); root.recycle(); }
+    int sh = screen.height() > 0 ? screen.height() : 2000;
+    int sw = screen.width() > 0 ? screen.width() : 1080;
+
+    NodeInfo best = null;
+    int bestIdx = -1;
+    int maxX = 0;
+    for (int i = 0; i < nodes.size(); i++) {
+      NodeInfo info = nodes.get(i);
+      if (!info.className.contains("EditText")
+          && info.bounds.top > sh * 0.75
+          && info.bounds.centerX() > maxX) {
+        maxX = info.bounds.centerX();
+        best = info;
+        bestIdx = i;
+      }
+    }
+    if (best != null) {
+      currentHiddenIndex = bestIdx;
+      boolean clicked = best.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+      if (!clicked) clicked = tapAtCenter(best.bounds);
+      return clicked ? "Сообщение отправлено" : "Не удалось отправить";
+    }
+    return null;
+  }
+
   @NonNull
   public String getHiddenElementsSummary() {
     List<NodeInfo> nodes = scanForHiddenElements();
-    if (nodes.isEmpty()) {
-      return "Скрытых элементов не найдено";
-    }
+    if (nodes.isEmpty()) return "Скрытых элементов не найдено";
     StringBuilder sb = new StringBuilder();
-    sb.append("Найдено ").append(nodes.size()).append(" скрытых элементов: ");
+    sb.append(nodes.size()).append(" скрытых элементов. ");
     for (int i = 0; i < nodes.size(); i++) {
-      if (i > 0) sb.append(", ");
-      sb.append(nodes.get(i).label);
+      sb.append(i + 1).append(": ").append(nodes.get(i).label);
+      if (i < nodes.size() - 1) sb.append(". ");
     }
+    sb.append(". Свайп тремя пальцами для навигации, вниз для нажатия, вверх для отправки.");
     return sb.toString();
   }
 
-  /**
-   * Finds first node matching a class name substring.
-   */
+  // === Coordinate tap ===
+
+  private boolean tapAtCenter(Rect bounds) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false;
+    int x = bounds.centerX();
+    int y = bounds.centerY();
+    if (x <= 0 || y <= 0) return false;
+    Log.d(TAG, "Tap at " + x + "," + y);
+    Path path = new Path();
+    path.moveTo(x, y);
+    GestureDescription gesture = new GestureDescription.Builder()
+        .addStroke(new GestureDescription.StrokeDescription(path, 0, 100))
+        .build();
+    return service.dispatchGesture(gesture, null, null);
+  }
+
+  // === Fallback ===
+
   @Nullable
-  private AccessibilityNodeInfo findFirstByClass(
-      AccessibilityNodeInfo node, String classSubstring, int depth) {
-    if (node == null || depth > 30) return null;
-
-    String cls = node.getClassName() != null ? node.getClassName().toString() : "";
-    if (cls.contains(classSubstring) && node.isVisibleToUser()) {
-      return AccessibilityNodeInfo.obtain(node);
+  private String findAndFocusAnyEditText() {
+    AccessibilityNodeInfo root = service.getRootInActiveWindow();
+    if (root == null) return null;
+    AccessibilityNodeInfo et = findFirst(root, "EditText", 0);
+    if (et != null) {
+      et.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+      Rect b = new Rect(); et.getBoundsInScreen(b);
+      tapAtCenter(b);
+      root.recycle();
+      return "Поле ввода сообщения";
     }
+    root.recycle();
+    return null;
+  }
 
+  @Nullable
+  private AccessibilityNodeInfo findFirst(AccessibilityNodeInfo node, String cls, int depth) {
+    if (node == null || depth > 30) return null;
+    String cn = node.getClassName() != null ? node.getClassName().toString() : "";
+    if (cn.contains(cls) && node.isVisibleToUser()) return AccessibilityNodeInfo.obtain(node);
     for (int i = 0; i < node.getChildCount(); i++) {
       AccessibilityNodeInfo child = node.getChild(i);
       if (child != null) {
-        AccessibilityNodeInfo found = findFirstByClass(child, classSubstring, depth + 1);
-        if (found != null) {
-          child.recycle();
-          return found;
-        }
+        AccessibilityNodeInfo f = findFirst(child, cls, depth + 1);
+        if (f != null) { child.recycle(); return f; }
         child.recycle();
       }
     }
     return null;
   }
 
-  /** Clears cached scan results. */
   public void clearCache() {
     for (NodeInfo info : hiddenNodes) {
       try { info.node.recycle(); } catch (Exception ignored) {}

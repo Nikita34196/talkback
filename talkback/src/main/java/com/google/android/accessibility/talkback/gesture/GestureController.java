@@ -730,13 +730,9 @@ public class GestureController {
         if (MaxAccessibilityFixer.PACKAGE_NAME.equals(currentPackage.toString())) {
           // 3-finger single tap = focus input field
           if (gestureId == AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP) {
-            if (maxFixer.focusInputField()) {
-              pipeline.returnFeedback(
-                  eventId, Feedback.speech("Поле ввода сообщения"));
-            } else {
-              pipeline.returnFeedback(
-                  eventId, Feedback.speech("Поле ввода не найдено"));
-            }
+            String result = maxFixer.focusInputField();
+            pipeline.returnFeedback(eventId,
+                Feedback.speech(result != null ? result : "Поле ввода не найдено"));
             rootNode.recycle();
             return;
           }
@@ -767,9 +763,18 @@ public class GestureController {
           }
           // 3-finger swipe down = click current hidden element
           if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_DOWN) {
-            if (maxFixer.clickCurrentHidden()) {
-              pipeline.returnFeedback(eventId, Feedback.speech("Нажато"));
+            String result = maxFixer.clickCurrentHidden();
+            if (result != null) {
+              pipeline.returnFeedback(eventId, Feedback.speech(result));
             }
+            rootNode.recycle();
+            return;
+          }
+          // 3-finger swipe up = send message
+          if (gestureId == AccessibilityService.GESTURE_3_FINGER_SWIPE_UP) {
+            String result = maxFixer.clickSendButton();
+            pipeline.returnFeedback(eventId,
+                Feedback.speech(result != null ? result : "Кнопка отправки не найдена"));
             rootNode.recycle();
             return;
           }

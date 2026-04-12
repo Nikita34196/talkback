@@ -6,7 +6,8 @@
 Когда стандартные методы (OCR, icon detection) не могут описать элемент,
 скриншот отправляется в Claude Vision API и возвращается описание на русском.
 
-**Настройка:** В настройках TalkBack → ввести API ключ Anthropic.
+**Настройка:** В настройках TalkBack → Anthropic AI → включить и ввести API ключ.
+Ключ можно получить на console.anthropic.com
 
 ### 2. Улучшенная поддержка мессенджера Max (ru.oneme.app)
 - Автоматическое распознавание неподписанных кнопок по ID ресурсов
@@ -38,7 +39,13 @@
 
 **Модифицированные (оригинал + наши изменения):**
 - `ImageCaptioner.java` — добавлен Anthropic как fallback
-- `GestureController.java` — добавлен перехват жестов по packageName
+- `GestureController.java` — добавлен перехват жестов по packageName + Max
 - `AccessibilityNodeFeedbackUtils.java` — добавлен Max messenger labeling
+- `preferences.xml` — добавлен пункт Anthropic AI
 - `build.gradle` — изменён applicationId
 - `.github/workflows/build.yml` — CI/CD
+
+**Ресурсы:**
+- `anthropic_preferences.xml` — экран настроек Anthropic
+- `anthropic_strings.xml` — строки UI на русском
+- `AnthropicSettingsFragment.java` — фрагмент настроек
