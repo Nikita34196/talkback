@@ -924,7 +924,14 @@ public class TouchInteractionMonitor
     // time minus lastMotionEventTransmissionLatency
     Performance.getInstance().onGestureRecognized(eventId, gestureId);
     if (gestureId == AccessibilityService.GESTURE_DOUBLE_TAP) {
-      if (serviceHandlesDoubleTap) {
+      // Max messenger: use native click (performClick) instead of service pipeline.
+      // performClick sends a real click at touch position — works for Max hidden buttons.
+      // All other apps use standard service-handled double-tap.
+      boolean maxActive = false;
+      try {
+        maxActive = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+      } catch (Exception ignored) {}
+      if (serviceHandlesDoubleTap && !maxActive) {
         dispatchGestureToMainThreadAndClear(gestureEvent);
       } else {
         controller.performClick();

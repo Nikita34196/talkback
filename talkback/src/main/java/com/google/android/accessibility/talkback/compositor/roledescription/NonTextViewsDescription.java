@@ -202,24 +202,25 @@ public final class NonTextViewsDescription implements RoleDescription {
   }
 
   private static boolean isFromMax(AccessibilityNodeInfoCompat node) {
-    // Check node itself
+    // Primary: check global flag set by TalkBackService on window change
+    try {
+      if (com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive()) {
+        return true;
+      }
+    } catch (Exception ignored) {}
+    // Fallback: check node package
     CharSequence pkg = node.getPackageName();
     if (MAX_PACKAGE.equals(pkg != null ? pkg.toString() : "")) return true;
-    // Check parents (up to 15 levels)
+    // Check parents
     AccessibilityNodeInfoCompat current = node;
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 10; i++) {
       AccessibilityNodeInfoCompat parent = current.getParent();
       if (parent == null) break;
       pkg = parent.getPackageName();
-      if (MAX_PACKAGE.equals(pkg != null ? pkg.toString() : "")) return true;
+      if (pkg != null) return MAX_PACKAGE.equals(pkg.toString());
       current = parent;
     }
-    // Global flag fallback
-    try {
-      return com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
-    } catch (Exception e) {
-      return false;
-    }
+    return false;
   }
 
   private static android.graphics.Rect findEditTextInNearby(AccessibilityNodeInfoCompat node) {

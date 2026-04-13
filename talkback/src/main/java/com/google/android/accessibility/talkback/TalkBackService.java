@@ -1037,17 +1037,16 @@ public class TalkBackService extends AccessibilityServiceCompat
     accessibilityEventProcessor.onAccessibilityEvent(event, eventId);
     perf.onHandlerDone(eventId);
 
-    // Max messenger: track when Max is in foreground for shouldFocusNode
+    // Track Max messenger foreground state for navigation and click handling
     if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
       try {
         CharSequence eventPkg = event.getPackageName();
         String pkg = eventPkg != null ? eventPkg.toString() : "";
         CharSequence eventClass = event.getClassName();
         String cls = eventClass != null ? eventClass.toString() : "";
-        boolean isRealAppSwitch = cls.contains("Activity");
-        boolean isMaxEvent = "ru.oneme.app".equals(pkg);
-        if (isRealAppSwitch || isMaxEvent) {
-          com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(isMaxEvent);
+        if (cls.contains("Activity") || "ru.oneme.app".equals(pkg)) {
+          com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(
+              "ru.oneme.app".equals(pkg));
         }
       } catch (Exception ignored) {}
     }
@@ -3754,10 +3753,10 @@ public class TalkBackService extends AccessibilityServiceCompat
   private void registerGestureDetection() {
     AccessibilityServiceInfo info = getServiceInfo();
     if (info != null) {
-      // Do NOT set FLAG_SERVICE_HANDLES_DOUBLE_TAP.
-      // Without this flag, Android handles double-tap natively by sending a real click
-      // at the touch exploration position. This is how Jieshuo and Corvus work,
-      // and it makes clicks work in ALL apps including Max messenger.
+      // When gesture detection's enabled in the service side, FLAG_SERVICE_HANDLES_DOUBLE_TAP
+      // will be set. And it won't be changed during the life time of service. Otherwise the touch
+      // interaction controller will be affected.
+      info.flags |= FLAG_SERVICE_HANDLES_DOUBLE_TAP;
       setServiceInfo(info);
     }
 
@@ -3782,7 +3781,7 @@ public class TalkBackService extends AccessibilityServiceCompat
               this::onGestureDebug);
       touchInteractionMonitor.setMultiFingerGesturesEnabled(true);
       touchInteractionMonitor.setTwoFingerPassthroughEnabled(true);
-      touchInteractionMonitor.setServiceHandlesDoubleTap(false);
+      touchInteractionMonitor.setServiceHandlesDoubleTap(true);
       touchInteractionController.registerCallback(gestureExecutor, touchInteractionMonitor);
       displayIdToTouchInteractionMonitors.put(display.getDisplayId(), touchInteractionMonitor);
       userInterface.registerListener(touchInteractionMonitor);
