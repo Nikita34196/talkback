@@ -3497,33 +3497,31 @@ public class AccessibilityNodeInfoUtils {
       return false;
     }
 
-    // Only force-focus elements that TalkBack would normally SKIP.
-    // Don't interfere with elements that already have labels (Назад, Звонок, etc.)
-    // — those are already visible in normal navigation.
-    // Exception: EditText — always force-focus (getText() returns typed text, not a label)
     String className = node.getClassName() != null ? node.getClassName().toString() : "";
-    boolean isEditText = className.contains("EditText") || node.isEditable();
+    // Only the ACTUAL EditText class bypasses guards (not editable containers)
+    boolean isActualEditText = className.contains("EditText");
 
-    if (!isEditText) {
+    if (!isActualEditText) {
+      // Don't interfere with elements that already have labels
       boolean hasLabel = !android.text.TextUtils.isEmpty(node.getContentDescription())
           || !android.text.TextUtils.isEmpty(node.getText());
       if (hasLabel) {
-        return false; // Let standard shouldFocusNode handle these
+        return false;
+      }
+      // Don't grab parent containers
+      if (node.getChildCount() > 0) {
+        return false;
       }
     }
 
-    // Only force-focus leaf nodes (no children) to avoid grabbing parent containers
-    // Exception: EditText may have children (cursor, etc.)
-    if (!isEditText && node.getChildCount() > 0) {
-      return false;
-    }
-
-    // Force-focus unlabeled interactive leaf elements (hidden buttons in Max)
-    if (node.isClickable() || node.isLongClickable() || node.isEditable()) {
+    // Force-focus: actual EditText, or unlabeled clickable leaf elements
+    if (isActualEditText) {
       return true;
     }
-    return className.contains("EditText")
-        || className.contains("ImageView")
+    if (node.isClickable() || node.isLongClickable()) {
+      return true;
+    }
+    return className.contains("ImageView")
         || className.contains("ImageButton");
   }
 
