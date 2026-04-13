@@ -3493,19 +3493,30 @@ public class AccessibilityNodeInfoUtils {
    * because individual nodes may not have packageName set.
    */
   private static boolean isMaxMessengerInteractiveNode(AccessibilityNodeInfoCompat node) {
-    // MUST verify this node actually belongs to Max messenger.
-    // AppCompatState can be stale when switching between apps.
     if (!isNodeFromMax(node)) {
       return false;
     }
 
-    // In Max: force-focus ANY interactive or editable element
+    // Only force-focus elements that TalkBack would normally SKIP.
+    // Don't interfere with elements that already have labels (Назад, Звонок, etc.)
+    // — those are already visible in normal navigation.
+    boolean hasLabel = !android.text.TextUtils.isEmpty(node.getContentDescription())
+        || !android.text.TextUtils.isEmpty(node.getText());
+    if (hasLabel) {
+      return false; // Let standard shouldFocusNode handle these
+    }
+
+    // Only force-focus leaf nodes (no children) to avoid grabbing parent containers
+    if (node.getChildCount() > 0) {
+      return false;
+    }
+
+    // Force-focus unlabeled interactive leaf elements (hidden buttons in Max)
     if (node.isClickable() || node.isLongClickable() || node.isEditable()) {
       return true;
     }
     String className = node.getClassName() != null ? node.getClassName().toString() : "";
     return className.contains("EditText")
-        || className.contains("Button")
         || className.contains("ImageView")
         || className.contains("ImageButton");
   }
