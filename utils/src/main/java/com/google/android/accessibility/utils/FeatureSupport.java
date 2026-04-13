@@ -403,22 +403,14 @@ public final class FeatureSupport {
 
   /** Returns {@code true} if the device has braille keyboard supported. */
   public static boolean supportBrailleKeyboard(Context context) {
-    if (brailleKeyboardSettingsActivityPresent == null) {
-      Intent activityIntent = new Intent().setComponent(Constants.BRAILLE_KEYBOARD_SETTINGS);
-      brailleKeyboardSettingsActivityPresent =
-          activityIntent.resolveActivityInfo(context.getPackageManager(), 0) != null;
-    }
-    return brailleKeyboardSettingsActivityPresent;
+    // Always show braille keyboard settings (resolveActivityInfo fails with custom applicationId)
+    return true;
   }
 
   /** Returns {@code true} if the device has braille display supported. */
   public static boolean supportBrailleDisplay(Context context) {
-    if (brailleDisplaySettingsActivityPresent == null) {
-      Intent activityIntent = new Intent().setComponent(Constants.BRAILLE_DISPLAY_SETTINGS);
-      brailleDisplaySettingsActivityPresent =
-          activityIntent.resolveActivityInfo(context.getPackageManager(), 0) != null;
-    }
-    return brailleDisplaySettingsActivityPresent;
+    // Always show braille display settings (resolveActivityInfo fails with custom applicationId)
+    return true;
   }
 
   /**
