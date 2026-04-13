@@ -1046,6 +1046,8 @@ public class TalkBackService extends AccessibilityServiceCompat
         CharSequence eventPkg = event.getPackageName();
         boolean maxInForeground = "ru.oneme.app".equals(
             eventPkg != null ? eventPkg.toString() : "");
+        // Set global flag for TouchInteractionMonitor and shouldFocusNode
+        com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(maxInForeground);
         android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
         if (info != null) {
           if (maxInForeground) {
