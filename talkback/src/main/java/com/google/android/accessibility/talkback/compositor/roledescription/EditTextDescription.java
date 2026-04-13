@@ -110,10 +110,36 @@ public final class EditTextDescription implements RoleDescription {
       } else if (!TextUtils.isEmpty(labelText)) {
         arrayList.add(labelText);
       } else {
-        // Max messenger: label empty EditText as "Написать сообщение"
-        CharSequence pkg = node.getPackageName();
-        if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
-          arrayList.add("Написать сообщение");
+        // Try hint text (some apps set hint but not text/contentDescription)
+        CharSequence hint = node.getHintText();
+        if (!TextUtils.isEmpty(hint)) {
+          arrayList.add(hint);
+        } else {
+          // Max messenger: label empty EditText
+          boolean isMax = false;
+          CharSequence pkg = node.getPackageName();
+          if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+            isMax = true;
+          } else {
+            // Check parents (Max nodes often lack packageName)
+            AccessibilityNodeInfoCompat p = node.getParent();
+            for (int i = 0; i < 10 && p != null; i++) {
+              pkg = p.getPackageName();
+              if (pkg != null) {
+                isMax = "ru.oneme.app".equals(pkg.toString());
+                break;
+              }
+              p = p.getParent();
+            }
+          }
+          if (!isMax) {
+            try {
+              isMax = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+            } catch (Exception ignored) {}
+          }
+          if (isMax) {
+            arrayList.add("Написать сообщение");
+          }
         }
       }
     }

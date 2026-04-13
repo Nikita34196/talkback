@@ -95,7 +95,11 @@ public final class NonTextViewsDescription implements RoleDescription {
         }
         if (nodeBounds.left >= editBounds.right - 20) {
           int toRight = countButtonsToRight(node, nodeBounds);
-          if (toRight == 0) return "Голосовое сообщение";
+          if (toRight == 0) {
+            // Rightmost button: Send (when text typed) or Voice message (when empty)
+            boolean editHasText = hasEditTextWithText(node);
+            return editHasText ? "Отправить" : "Голосовое сообщение";
+          }
           if (toRight == 1) return "Камера";
           if (toRight == 2) return "Прикрепить файл";
           return "Кнопка";
@@ -273,6 +277,35 @@ public final class NonTextViewsDescription implements RoleDescription {
       }
     }
     return count;
+  }
+
+  /** Check if a sibling EditText contains typed text (to distinguish Send vs Voice). */
+  private static boolean hasEditTextWithText(AccessibilityNodeInfoCompat node) {
+    AccessibilityNodeInfoCompat parent = node.getParent();
+    for (int level = 0; level < 3 && parent != null; level++) {
+      for (int i = 0; i < parent.getChildCount() && i < 20; i++) {
+        AccessibilityNodeInfoCompat child = parent.getChild(i);
+        if (child != null) {
+          String cls = child.getClassName() != null ? child.getClassName().toString() : "";
+          if (cls.contains("EditText") || child.isEditable()) {
+            CharSequence text = child.getText();
+            return text != null && text.length() > 0;
+          }
+          for (int j = 0; j < child.getChildCount() && j < 10; j++) {
+            AccessibilityNodeInfoCompat gc = child.getChild(j);
+            if (gc != null) {
+              cls = gc.getClassName() != null ? gc.getClassName().toString() : "";
+              if (cls.contains("EditText") || gc.isEditable()) {
+                CharSequence text = gc.getText();
+                return text != null && text.length() > 0;
+              }
+            }
+          }
+        }
+      }
+      parent = parent.getParent();
+    }
+    return false;
   }
 
   @Override
