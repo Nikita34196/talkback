@@ -7,6 +7,10 @@ apply from: 'shared.gradle'
 
 apply from: 'version.gradle'
 
+// Override talkbackApplicationId so all internal references (braille, settings, etc.)
+// use our custom package name instead of com.android.talkback
+ext.talkbackApplicationId = "com.nikita.screenreader.talkback"
+
 final BUILD_TIMESTAMP = new Date().format('yyyy_MM_dd_HHmm')
 
 dependencies {
@@ -35,14 +39,17 @@ allprojects {
 }
 
 android {
-    namespace "com.android.talkback"
+    namespace "com.nikita.screenreader.talkback"
     defaultConfig {
-        applicationId talkbackApplicationId
+        applicationId "com.nikita.screenreader.talkback"
         versionName talkbackVersionName + "-mod-" + BUILD_TIMESTAMP
         minSdkVersion 26
         targetSdkVersion 30
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
         multiDexEnabled true
+        // Override internal package references to match our applicationId
+        buildConfigField "String", "APPLICATION_ID", "\"com.nikita.screenreader.talkback\""
+        resValue "string", "app_id", "com.nikita.screenreader.talkback"
     }
     packagingOptions {
         exclude 'LICENSE'
