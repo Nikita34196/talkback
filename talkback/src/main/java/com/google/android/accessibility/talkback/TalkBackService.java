@@ -1037,25 +1037,17 @@ public class TalkBackService extends AccessibilityServiceCompat
     accessibilityEventProcessor.onAccessibilityEvent(event, eventId);
     perf.onHandlerDone(eventId);
 
-    // Max messenger fix: toggle FLAG_SERVICE_HANDLES_DOUBLE_TAP based on foreground app.
-    // When Max is in foreground, let the framework handle double-tap natively (click at position).
-    // IMPORTANT: check the EVENT's package (= app coming to foreground), NOT getWindows()
-    // which includes background apps and would keep the flag removed even in Telegram.
+    // Max messenger: track when Max is in foreground for shouldFocusNode
     if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
       try {
         CharSequence eventPkg = event.getPackageName();
-        boolean maxInForeground = "ru.oneme.app".equals(
-            eventPkg != null ? eventPkg.toString() : "");
-        // Set global flag for TouchInteractionMonitor and shouldFocusNode
-        com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(maxInForeground);
-        android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
-        if (info != null) {
-          if (maxInForeground) {
-            info.flags &= ~android.accessibilityservice.AccessibilityServiceInfo.FLAG_SERVICE_HANDLES_DOUBLE_TAP;
-          } else {
-            info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_SERVICE_HANDLES_DOUBLE_TAP;
-          }
-          setServiceInfo(info);
+        String pkg = eventPkg != null ? eventPkg.toString() : "";
+        CharSequence eventClass = event.getClassName();
+        String cls = eventClass != null ? eventClass.toString() : "";
+        boolean isRealAppSwitch = cls.contains("Activity");
+        boolean isMaxEvent = "ru.oneme.app".equals(pkg);
+        if (isRealAppSwitch || isMaxEvent) {
+          com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(isMaxEvent);
         }
       } catch (Exception ignored) {}
     }
@@ -3762,10 +3754,10 @@ public class TalkBackService extends AccessibilityServiceCompat
   private void registerGestureDetection() {
     AccessibilityServiceInfo info = getServiceInfo();
     if (info != null) {
-      // When gesture detection's enabled in the service side, FLAG_SERVICE_HANDLES_DOUBLE_TAP
-      // will be set. And it won't be changed during the life time of service. Otherwise the touch
-      // interaction controller will be affected.
-      info.flags |= FLAG_SERVICE_HANDLES_DOUBLE_TAP;
+      // Do NOT set FLAG_SERVICE_HANDLES_DOUBLE_TAP.
+      // Without this flag, Android handles double-tap natively by sending a real click
+      // at the touch exploration position. This is how Jieshuo and Corvus work,
+      // and it makes clicks work in ALL apps including Max messenger.
       setServiceInfo(info);
     }
 
@@ -3790,7 +3782,7 @@ public class TalkBackService extends AccessibilityServiceCompat
               this::onGestureDebug);
       touchInteractionMonitor.setMultiFingerGesturesEnabled(true);
       touchInteractionMonitor.setTwoFingerPassthroughEnabled(true);
-      touchInteractionMonitor.setServiceHandlesDoubleTap(true);
+      touchInteractionMonitor.setServiceHandlesDoubleTap(false);
       touchInteractionController.registerCallback(gestureExecutor, touchInteractionMonitor);
       displayIdToTouchInteractionMonitors.put(display.getDisplayId(), touchInteractionMonitor);
       userInterface.registerListener(touchInteractionMonitor);

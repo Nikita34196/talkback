@@ -924,16 +924,7 @@ public class TouchInteractionMonitor
     // time minus lastMotionEventTransmissionLatency
     Performance.getInstance().onGestureRecognized(eventId, gestureId);
     if (gestureId == AccessibilityService.GESTURE_DOUBLE_TAP) {
-      // Max messenger fix: always use native controller.performClick() for Max.
-      // When serviceHandlesDoubleTap=true, the gesture gets dispatched through the
-      // FocusActor pipeline which fails for Max's hidden ImageView buttons.
-      // Native performClick() sends a real click at touch position — works like Corvus.
-      boolean useNativeClick = false;
-      try {
-        useNativeClick = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
-      } catch (Exception ignored) {}
-
-      if (serviceHandlesDoubleTap && !useNativeClick) {
+      if (serviceHandlesDoubleTap) {
         dispatchGestureToMainThreadAndClear(gestureEvent);
       } else {
         controller.performClick();
