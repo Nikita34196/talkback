@@ -109,6 +109,12 @@ public final class EditTextDescription implements RoleDescription {
         arrayList.add(contentAndSupplementalDescription);
       } else if (!TextUtils.isEmpty(labelText)) {
         arrayList.add(labelText);
+      } else {
+        // Max messenger: label empty EditText as "Написать сообщение"
+        CharSequence pkg = node.getPackageName();
+        if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+          arrayList.add("Написать сообщение");
+        }
       }
     }
     return CompositorUtils.joinCharSequences(arrayList, CompositorUtils.getSeparator(), true);
