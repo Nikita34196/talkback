@@ -1039,21 +1039,13 @@ public class TalkBackService extends AccessibilityServiceCompat
 
     // Max messenger fix: toggle FLAG_SERVICE_HANDLES_DOUBLE_TAP based on foreground app.
     // When Max is in foreground, let the framework handle double-tap natively (click at position).
-    // This is how Corvus and other screen readers handle clicks — they don't intercept double-tap.
+    // IMPORTANT: check the EVENT's package (= app coming to foreground), NOT getWindows()
+    // which includes background apps and would keep the flag removed even in Telegram.
     if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
       try {
-        boolean maxInForeground = false;
-        for (android.view.accessibility.AccessibilityWindowInfo window : getWindows()) {
-          android.view.accessibility.AccessibilityNodeInfo root = window.getRoot();
-          if (root != null) {
-            CharSequence pkg = root.getPackageName();
-            root.recycle();
-            if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
-              maxInForeground = true;
-              break;
-            }
-          }
-        }
+        CharSequence eventPkg = event.getPackageName();
+        boolean maxInForeground = "ru.oneme.app".equals(
+            eventPkg != null ? eventPkg.toString() : "");
         android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
         if (info != null) {
           if (maxInForeground) {
