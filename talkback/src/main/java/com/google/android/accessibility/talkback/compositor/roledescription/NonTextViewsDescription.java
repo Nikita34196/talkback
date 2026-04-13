@@ -42,8 +42,8 @@ public final class NonTextViewsDescription implements RoleDescription {
    * Tries to label a Max messenger element by its position relative to the EditText.
    * Returns null if not in Max or can't determine label.
    */
-  private static String tryLabelMaxElement(AccessibilityNodeInfoCompat node) {
-    // Check if this node is from Max — try node itself, then parents
+  private static String tryLabelMaxElement(
+      AccessibilityNodeInfoCompat node, Context context) {
     if (!isFromMax(node)) {
       return null;
     }
@@ -53,11 +53,11 @@ public final class NonTextViewsDescription implements RoleDescription {
       return "Написать сообщение";
     }
 
-    // Find EditText sibling to determine relative position
     android.graphics.Rect nodeBounds = new android.graphics.Rect();
     node.getBoundsInScreen(nodeBounds);
     if (nodeBounds.width() <= 0) return null;
 
+    // Default labels (user can override via TalkBack's "Add label" menu)
     android.graphics.Rect editBounds = findEditTextInNearby(node);
     if (editBounds != null && editBounds.height() > 0) {
       boolean sameRow = Math.abs(nodeBounds.centerY() - editBounds.centerY()) < 80;
@@ -75,7 +75,6 @@ public final class NonTextViewsDescription implements RoleDescription {
       }
     }
 
-    // Fallback: screen-position based (approximate)
     if (nodeBounds.centerX() < 120) return "Эмодзи";
     return node.isClickable() ? "Кнопка" : null;
   }
@@ -160,7 +159,7 @@ public final class NonTextViewsDescription implements RoleDescription {
         node, context, imageContents, globalVariables);
     // If no label found, try Max messenger position-based labeling
     if (TextUtils.isEmpty(result) && node != null) {
-      String maxLabel = tryLabelMaxElement(node);
+      String maxLabel = tryLabelMaxElement(node, context);
       if (maxLabel != null) {
         return maxLabel;
       }
@@ -208,7 +207,7 @@ public final class NonTextViewsDescription implements RoleDescription {
     if (TextUtils.isEmpty(nodeTextOrLabelOrId)) {
       // Try Max messenger labeling before saying "без ярлыка"
       if (node != null) {
-        String maxLabel = tryLabelMaxElement(node);
+        String maxLabel = tryLabelMaxElement(node, context);
         if (maxLabel != null) {
           return "";
         }

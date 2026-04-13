@@ -88,7 +88,7 @@ public class CustomLabelManager extends TalkBackLabelManager {
     @Override
     public long getLabelIdForNode(AccessibilityNodeInfoCompat node) {
       Label label =
-          (node == null) ? null : getLabelForViewIdFromCache(node.getViewIdResourceName());
+          (node == null) ? null : getLabelForViewIdFromCache(getEffectiveViewId(node));
       if (label == null) {
         return Label.NO_ID;
       }
@@ -345,7 +345,7 @@ public class CustomLabelManager extends TalkBackLabelManager {
       return false;
     }
 
-    @Nullable String resourceName = node.getViewIdResourceName();
+    @Nullable String resourceName = getEffectiveViewId(node);
     if (resourceName == null) {
       return false;
     }
@@ -372,7 +372,7 @@ public class CustomLabelManager extends TalkBackLabelManager {
       return false;
     }
 
-    @Nullable String resourceName = node.getViewIdResourceName();
+    @Nullable String resourceName = getEffectiveViewId(node);
     if (resourceName == null) {
       return false;
     }
@@ -706,5 +706,40 @@ public class CustomLabelManager extends TalkBackLabelManager {
 
   public interface OnLabelsInPackageChangeListener {
     public void onLabelsInPackageChanged(String packageName);
+  }
+
+  /**
+   * Returns the viewIdResourceName for a node, or a synthetic ID for Max messenger elements.
+   * Max buttons often lack viewIds, so we generate stable synthetic IDs based on
+   * their position relative to the EditText input field.
+   */
+  @Nullable
+  private static String getEffectiveViewId(@Nullable AccessibilityNodeInfoCompat node) {
+    if (node == null) return null;
+
+    // Use real viewId if available
+    String viewId = node.getViewIdResourceName();
+    if (viewId != null) return viewId;
+
+    // Generate synthetic viewId for Max messenger elements
+    CharSequence pkg = node.getPackageName();
+    boolean isMax = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
+    if (!isMax) {
+      // Check parents
+      AccessibilityNodeInfoCompat parent = node.getParent();
+      for (int i = 0; i < 10 && parent != null && !isMax; i++) {
+        pkg = parent.getPackageName();
+        isMax = "ru.oneme.app".equals(pkg != null ? pkg.toString() : "");
+        if (!isMax) parent = parent.getParent();
+      }
+    }
+    if (!isMax) return null;
+
+    // Generate ID based on bounds — stable as long as layout doesn't change
+    android.graphics.Rect bounds = new android.graphics.Rect();
+    node.getBoundsInScreen(bounds);
+    // Use a simple hash of position to create a stable synthetic ID
+    String posKey = "x" + (bounds.centerX() / 50) + "y" + (bounds.centerY() / 50);
+    return "ru.oneme.app:id/max_element_" + posKey;
   }
 }
