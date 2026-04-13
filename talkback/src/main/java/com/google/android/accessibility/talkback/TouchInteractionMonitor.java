@@ -924,12 +924,25 @@ public class TouchInteractionMonitor
     // time minus lastMotionEventTransmissionLatency
     Performance.getInstance().onGestureRecognized(eventId, gestureId);
     if (gestureId == AccessibilityService.GESTURE_DOUBLE_TAP) {
-      // Max messenger: use native click (performClick) instead of service pipeline.
-      // performClick sends a real click at touch position — works for Max hidden buttons.
-      // All other apps use standard service-handled double-tap.
+      // Max messenger: use native click instead of service pipeline.
+      // Check windows directly — AppCompatState may not be set in time.
       boolean maxActive = false;
       try {
-        maxActive = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+        for (android.view.accessibility.AccessibilityWindowInfo window : service.getWindows()) {
+          android.view.accessibility.AccessibilityNodeInfo root = window.getRoot();
+          if (root != null) {
+            CharSequence pkg = root.getPackageName();
+            root.recycle();
+            if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+              maxActive = true;
+              // Also update AppCompatState for label detection
+              try {
+                com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(true);
+              } catch (Exception ignored) {}
+              break;
+            }
+          }
+        }
       } catch (Exception ignored) {}
       if (serviceHandlesDoubleTap && !maxActive) {
         dispatchGestureToMainThreadAndClear(gestureEvent);

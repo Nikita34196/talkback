@@ -1037,16 +1037,35 @@ public class TalkBackService extends AccessibilityServiceCompat
     accessibilityEventProcessor.onAccessibilityEvent(event, eventId);
     perf.onHandlerDone(eventId);
 
-    // Track Max messenger foreground state for navigation and click handling
-    if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+    // Track Max messenger state — scan windows on relevant events
+    if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        || eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        || eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
       try {
+        boolean maxFound = false;
+        // Check event package first
         CharSequence eventPkg = event.getPackageName();
-        String pkg = eventPkg != null ? eventPkg.toString() : "";
-        CharSequence eventClass = event.getClassName();
-        String cls = eventClass != null ? eventClass.toString() : "";
-        if (cls.contains("Activity") || "ru.oneme.app".equals(pkg)) {
-          com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(
-              "ru.oneme.app".equals(pkg));
+        if ("ru.oneme.app".equals(eventPkg != null ? eventPkg.toString() : "")) {
+          maxFound = true;
+        }
+        // On window state change, also check if Max left foreground
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && !maxFound) {
+          CharSequence eventClass = event.getClassName();
+          String cls = eventClass != null ? eventClass.toString() : "";
+          if (cls.contains("Activity")) {
+            // Real app switch to non-Max app
+            maxFound = false;
+          }
+        }
+        if (maxFound) {
+          com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(true);
+        } else if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+          // Only clear on window state change (not content change)
+          CharSequence eventClass = event.getClassName();
+          String cls = eventClass != null ? eventClass.toString() : "";
+          if (cls.contains("Activity")) {
+            com.google.android.accessibility.utils.AppCompatState.setMaxMessengerActive(false);
+          }
         }
       } catch (Exception ignored) {}
     }
