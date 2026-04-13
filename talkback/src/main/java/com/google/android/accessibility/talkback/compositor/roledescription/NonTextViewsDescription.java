@@ -55,9 +55,37 @@ public final class NonTextViewsDescription implements RoleDescription {
 
     android.graphics.Rect nodeBounds = new android.graphics.Rect();
     node.getBoundsInScreen(nodeBounds);
-    if (nodeBounds.width() <= 0) return null;
+    if (nodeBounds.width() <= 0 || nodeBounds.height() <= 0) return null;
 
-    // Default labels (user can override via TalkBack's "Add label" menu)
+    // Get screen dimensions from root
+    int screenWidth = getScreenWidth(node);
+    int screenHeight = getScreenHeight(node);
+
+    // ================================================================
+    // ZONE 1: Top toolbar (back, call, video call, menu)
+    // Typically within top ~200px of screen
+    // ================================================================
+    if (nodeBounds.centerY() < 200) {
+      // Back arrow — leftmost button
+      if (nodeBounds.centerX() < screenWidth * 0.12) {
+        return "Назад";
+      }
+      // Right side buttons: phone, video, menu (right-to-left)
+      if (nodeBounds.centerX() > screenWidth * 0.55) {
+        int toRight = countSiblingsToRightInRow(node, nodeBounds);
+        if (toRight == 0) return "Меню";
+        if (toRight == 1) return "Видеозвонок";
+        if (toRight == 2) return "Голосовой звонок";
+        return "Кнопка панели";
+      }
+      // Avatar area
+      return null;
+    }
+
+    // ================================================================
+    // ZONE 2: Input bar (emoji, edittext, attach, camera, mic/send)
+    // Same row as EditText
+    // ================================================================
     android.graphics.Rect editBounds = findEditTextInNearby(node);
     if (editBounds != null && editBounds.height() > 0) {
       boolean sameRow = Math.abs(nodeBounds.centerY() - editBounds.centerY()) < 80;
@@ -75,8 +103,102 @@ public final class NonTextViewsDescription implements RoleDescription {
       }
     }
 
-    if (nodeBounds.centerX() < 120) return "Эмодзи";
-    return node.isClickable() ? "Кнопка" : null;
+    // ================================================================
+    // ZONE 3: Recording mode bottom bar (delete, pause, send)
+    // When recording, these appear at the very bottom of screen
+    // ================================================================
+    if (nodeBounds.centerY() > screenHeight - 250) {
+      // No EditText visible = probably recording mode
+      if (editBounds == null || editBounds.height() == 0) {
+        if (nodeBounds.centerX() < screenWidth * 0.2) {
+          return "Удалить запись";
+        }
+        if (nodeBounds.centerX() > screenWidth * 0.8) {
+          return "Отправить запись";
+        }
+        if (nodeBounds.centerX() > screenWidth * 0.3
+            && nodeBounds.centerX() < screenWidth * 0.7) {
+          return "Пауза";
+        }
+      }
+      // Bottom area with EditText visible — already handled in ZONE 2
+      // If we're here, it's an extra button
+      if (nodeBounds.centerX() > screenWidth * 0.8) {
+        return "Отправить";
+      }
+    }
+
+    // ================================================================
+    // ZONE 4: Message area — play buttons on voice messages
+    // Circular buttons in the middle area of the screen
+    // ================================================================
+    if (nodeBounds.centerY() > 200 && nodeBounds.centerY() < screenHeight - 250) {
+      // Play buttons are typically square-ish and small (voice message controls)
+      int w = nodeBounds.width();
+      int h = nodeBounds.height();
+      boolean isSmallSquare = w > 30 && h > 30 && w < 200 && h < 200
+          && Math.abs(w - h) < 40;
+      if (isSmallSquare && node.isClickable()) {
+        return "Воспроизвести";
+      }
+    }
+
+    // Generic fallback
+    if (node.isClickable()) return "Кнопка";
+    return null;
+  }
+
+  /** Get screen width from node's root bounds. */
+  private static int getScreenWidth(AccessibilityNodeInfoCompat node) {
+    try {
+      AccessibilityNodeInfoCompat current = node;
+      for (int i = 0; i < 20; i++) {
+        AccessibilityNodeInfoCompat parent = current.getParent();
+        if (parent == null) break;
+        current = parent;
+      }
+      android.graphics.Rect rootBounds = new android.graphics.Rect();
+      current.getBoundsInScreen(rootBounds);
+      if (rootBounds.width() > 0) return rootBounds.width();
+    } catch (Exception ignored) {}
+    return 1080;
+  }
+
+  /** Get screen height from node's root bounds. */
+  private static int getScreenHeight(AccessibilityNodeInfoCompat node) {
+    try {
+      AccessibilityNodeInfoCompat current = node;
+      for (int i = 0; i < 20; i++) {
+        AccessibilityNodeInfoCompat parent = current.getParent();
+        if (parent == null) break;
+        current = parent;
+      }
+      android.graphics.Rect rootBounds = new android.graphics.Rect();
+      current.getBoundsInScreen(rootBounds);
+      if (rootBounds.height() > 0) return rootBounds.height();
+    } catch (Exception ignored) {}
+    return 2400;
+  }
+
+  /** Count siblings to the right in the same row (for toolbar buttons). */
+  private static int countSiblingsToRightInRow(
+      AccessibilityNodeInfoCompat node, android.graphics.Rect nodeBounds) {
+    AccessibilityNodeInfoCompat parent = node.getParent();
+    if (parent == null) return -1;
+    int count = 0;
+    for (int i = 0; i < parent.getChildCount(); i++) {
+      AccessibilityNodeInfoCompat sib = parent.getChild(i);
+      if (sib != null && sib != node) {
+        android.graphics.Rect sb = new android.graphics.Rect();
+        sib.getBoundsInScreen(sb);
+        if (sb.left > nodeBounds.right
+            && Math.abs(sb.centerY() - nodeBounds.centerY()) < 50
+            && sb.width() > 10) {
+          count++;
+        }
+      }
+    }
+    return count;
   }
 
   private static boolean isFromMax(AccessibilityNodeInfoCompat node) {
