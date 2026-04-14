@@ -847,6 +847,13 @@ public class Role {
       return ROLE_EDIT_TEXT;
     }
 
+    // Fallback: if the node is editable but uses a custom class (not standard EditText),
+    // still treat it as ROLE_EDIT_TEXT so it gets proper description and labeling.
+    // This fixes apps like Max messenger that use custom editable views.
+    if (node != null && node.isEditable()) {
+      return ROLE_EDIT_TEXT;
+    }
+
     // //////////////////////////////////////////////////////////////////////////////////////////
     // Subclasses of ProgressBar.
 
