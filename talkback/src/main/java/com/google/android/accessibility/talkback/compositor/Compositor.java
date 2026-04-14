@@ -521,6 +521,19 @@ public class Compositor {
     // Compose speech, and speech parameters.
     CharSequence ttsOutput =
         eventFeedback.ttsOutput().isPresent() ? eventFeedback.ttsOutput().get() : "";
+
+    // Max messenger: if speech would be empty for an editable field, announce it
+    if (TextUtils.isEmpty(ttsOutput) && options.sourceNode != null) {
+      try {
+        AccessibilityNodeInfoCompat srcNode = options.sourceNode;
+        boolean isMax = com.google.android.accessibility.utils.AppCompatState.isMaxMessengerActive();
+        if (isMax && srcNode.isEditable()) {
+          CharSequence hint = srcNode.getHintText();
+          ttsOutput = (hint != null && hint.length() > 0) ? hint : "Написать сообщение";
+        }
+      } catch (Exception ignored) {}
+    }
+
     if (!TextUtils.isEmpty(ttsOutput)) {
       // Cleans up the TTS output if it is just 1 character long. This will announce single
       // symbols correctly.
