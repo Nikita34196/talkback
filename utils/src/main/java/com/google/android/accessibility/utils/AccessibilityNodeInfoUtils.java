@@ -101,7 +101,29 @@ public class AccessibilityNodeInfoUtils {
 
   /** Returns text from an accessibility-node, including spans. */
   public static @Nullable CharSequence getText(@Nullable AccessibilityNodeInfoCompat node) {
-    return (node == null) ? null : node.getText();
+    if (node == null) return null;
+    CharSequence text = node.getText();
+    if (text != null && text.length() > 0) return text;
+    // Max messenger: if EditText has no text, return hint or default label
+    String className = node.getClassName() != null ? node.getClassName().toString() : "";
+    if (className.contains("EditText")) {
+      boolean isMax = false;
+      CharSequence pkg = node.getPackageName();
+      if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
+        isMax = true;
+      }
+      if (!isMax) {
+        try {
+          isMax = AppCompatState.isMaxMessengerActive();
+        } catch (Exception ignored) {}
+      }
+      if (isMax) {
+        CharSequence hint = node.getHintText();
+        if (hint != null && hint.length() > 0) return hint;
+        return "Написать сообщение";
+      }
+    }
+    return text;
   }
 
   @FormatMethod
