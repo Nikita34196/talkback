@@ -104,18 +104,15 @@ public class AccessibilityNodeInfoUtils {
     if (node == null) return null;
     CharSequence text = node.getText();
     if (text != null && text.length() > 0) return text;
-    // Max messenger: if EditText has no text, return hint or default label
-    String className = node.getClassName() != null ? node.getClassName().toString() : "";
-    if (className.contains("EditText")) {
+    // Max messenger: label editable fields that have no text
+    if (node.isEditable()) {
       boolean isMax = false;
       CharSequence pkg = node.getPackageName();
       if ("ru.oneme.app".equals(pkg != null ? pkg.toString() : "")) {
         isMax = true;
       }
       if (!isMax) {
-        try {
-          isMax = AppCompatState.isMaxMessengerActive();
-        } catch (Exception ignored) {}
+        try { isMax = AppCompatState.isMaxMessengerActive(); } catch (Exception ignored) {}
       }
       if (isMax) {
         CharSequence hint = node.getHintText();
@@ -3520,26 +3517,27 @@ public class AccessibilityNodeInfoUtils {
     }
 
     String className = node.getClassName() != null ? node.getClassName().toString() : "";
-    // Only the ACTUAL EditText class bypasses guards (not editable containers)
-    boolean isActualEditText = className.contains("EditText");
+    boolean isEditableField = className.contains("EditText") || node.isEditable();
 
-    if (!isActualEditText) {
-      // Don't interfere with elements that already have labels
+    // For editable fields: always force-focus (these are input fields)
+    // Guard: skip large containers (editable containers have many children)
+    if (isEditableField && node.getChildCount() <= 2) {
+      return true;
+    }
+
+    // For non-editable elements: skip those with existing labels
+    if (!isEditableField) {
       boolean hasLabel = !android.text.TextUtils.isEmpty(node.getContentDescription())
           || !android.text.TextUtils.isEmpty(node.getText());
       if (hasLabel) {
         return false;
       }
-      // Don't grab parent containers
       if (node.getChildCount() > 0) {
         return false;
       }
     }
 
-    // Force-focus: actual EditText, or unlabeled clickable leaf elements
-    if (isActualEditText) {
-      return true;
-    }
+    // Force-focus unlabeled clickable leaf elements
     if (node.isClickable() || node.isLongClickable()) {
       return true;
     }
